@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#09090b" />
+      <stop offset="50%" stop-color="#18181b" />
+      <stop offset="100%" stop-color="#030712" />
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981" />
+      <stop offset="50%" stop-color="#06b6d4" />
+      <stop offset="100%" stop-color="#6366f1" />
+    </linearGradient>
+    <linearGradient id="glowGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.35" />
+      <stop offset="100%" stop-color="#6366f1" stop-opacity="0" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="16" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Background with subtle border -->
+  <rect width="512" height="512" rx="128" fill="url(#bgGrad)" />
+  <rect width="508" height="508" x="2" y="2" rx="126" fill="none" stroke="url(#accentGrad)" stroke-width="3" stroke-opacity="0.4" />
+
+  <!-- Ambient background glow -->
+  <circle cx="256" cy="240" r="140" fill="url(#glowGrad)" />
+
+  <!-- Microphone Capsule Body -->
+  <rect x="216" y="140" width="80" height="150" rx="40" fill="url(#accentGrad)" filter="url(#glow)" />
+  
+  <!-- Microphone Stand Arc -->
+  <path d="M176 230 C176 300, 336 300, 336 230" fill="none" stroke="#e2e8f0" stroke-width="18" stroke-linecap="round" />
+  
+  <!-- Microphone Stand Pole & Base -->
+  <path d="M256 295 L256 365" fill="none" stroke="#e2e8f0" stroke-width="18" stroke-linecap="round" />
+  <path d="M206 365 L306 365" fill="none" stroke="#e2e8f0" stroke-width="18" stroke-linecap="round" />
+
+  <!-- Reflection Stars / Insights (Sparkles) -->
+  <path d="M360 130 Q375 145 390 145 Q375 145 360 160 Q345 145 330 145 Q345 145 360 130 Z" fill="#38bdf8" />
+  <path d="M140 160 Q150 170 160 170 Q150 170 140 180 Q130 170 120 170 Q130 170 140 160 Z" fill="#10b981" />
+  <circle cx="370" cy="200" r="4" fill="#a855f7" />
+  <circle cx="150" cy="220" r="3" fill="#38bdf8" />
+</svg>

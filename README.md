@@ -29,10 +29,16 @@ voice-reflection-agent/
 │   ├── git_sync.py                            # Outbound git fetch / commit / push
 │   ├── processor.py                           # キューパース・リフレクション生成・保存
 │   └── daemon.py                              # 常駐監視・ワンショット実行 CLI
+├── web/                                       # iPhone録音用 Cloudflare Pages PWA
+│   ├── index.html                             # 単一SPA（Wake Lock、MediaRecorder、Gemini文字起こし、GitHub送信）
+│   ├── manifest.webmanifest                   # PWAマニフェスト設定
+│   ├── sw.js                                  # Service Worker (オフラインキャッシュ)
+│   └── icon.svg                               # アプリアイコン
 ├── config/
 │   └── com.user.voice-reflection.plist        # macOS launchd 設定（ログイン時自動常駐）
-└── templates/
-    └── reflection_prompt.md                   # Gemini 3.5+ 用プロンプトテンプレート
+├── templates/
+│   └── reflection_prompt.md                   # Gemini 3.5+ 用プロンプトテンプレート
+└── wrangler.json                              # Cloudflare Pages 静的配信設定
 ```
 
 ---
@@ -76,18 +82,53 @@ launchctl unload ~/Library/LaunchAgents/com.user.voice-reflection.plist
 
 ---
 
-## 📱 iPhone側からのキュー投入仕様
+## 📱 iPhone側クライアント（Cloudflare Pages PWA）
 
-### キューファイル形式（JSON）
+iPhoneでの快適な夜間セルフリフレクションを実現するため、**完全サーバーレスのPWA（`web/index.html`）** を同梱しています。
 
-`personal-vault` リポジトリの `00_Inbox/queue/YYYY-MM-DD-HHmmss.json` にコミットします。
+### 🌟 PWAの主な機能
+1. **Screen Wake Lock（画面スリープ防止）**:
+   - 録音開始と同時に自動で画面スリープを防止。夜間に数分〜十数分語り続けても画面が暗転・中断しません。
+2. **リアルタイム音量ビジュアライザー**:
+   - Web Audio API により、ベッドサイドの小声でもマイクが拾えているかを波形・インジケーターで視覚化。
+3. **Gemini Flash による高速・忠実な文字起こし**:
+   - Google AI Studio の `gemini-2.0-flash`（または `gemini-1.5-flash`）に音声を送信し、自然な相槌・言い淀みを残したまま高精度にテキスト化。
+4. **GitHub Queue への Direct Commit**:
+   - `hatomachi/personal-vault` の `00_Inbox/queue/YYYY-MM-DD-HHmmss.json` へ直接コミット。
+5. **完全サーバーレス＆高セキュリティ**:
+   - PAT や API Key はすべて端末の `localStorage` にのみ保存され、外部の中継サーバーは一切不要。
+
+### ☁️ Cloudflare Pages デプロイ手順（3分で完了）
+1. Cloudflare Dashboard ➡ **Workers & Pages** ➡ **Create application** ➡ **Pages** ➡ **Connect to Git**
+2. 本リポジトリ（`voice-reflection-agent`）を選択
+3. ビルド設定：
+   - **Framework preset**: None
+   - **Build command**: （空欄）
+   - **Build output directory**: `web`
+4. **Save and Deploy** をクリック ➡ 数秒で公開完了！
+
+### 📲 iPhoneでのホーム画面追加
+1. iPhone Safari でデプロイされた URL を開く
+2. 共有ボタン（四角から上矢印）をタップ ➡ **「ホーム画面に追加」**
+3. ホーム画面から起動すると、アドレスバーのない全画面ネイティブアプリ（standalone）として動作します。
+4. 初回起動時に右上の ⚙️ 設定から以下を入力：
+   - **GitHub PAT**: `Contents: Read and write` 権限を持つトークン
+   - **Owner / Repo**: `hatomachi` / `personal-vault`
+   - **Gemini API Key**: [Google AI Studio](https://aistudio.google.com/) で取得したキー
+5. 「接続テスト」を押して疎通を確認し、「保存する」をタップすれば準備完了！
+
+---
+
+## 📥 キューファイル形式（JSON）
+
+`personal-vault` リポジトリの `00_Inbox/queue/YYYY-MM-DD-HHmmss.json` にコミットされます。
 
 ```json
 {
   "date": "2026-09-13",
   "timestamp": "2026-09-13T23:30:00+09:00",
   "text": "今日の音声文字起こしテキスト...",
-  "source": "ios-shortcut"
+  "source": "web-pwa"
 }
 ```
 

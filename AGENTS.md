@@ -135,6 +135,7 @@ voice-reflection-agent/
    - 8/17〜9/11（全23日分）の過去ログを日別ノート群として `personal-vault/00_Inbox/Reflections/` に一括移行完了。
 4. **[x] Step 4: macOS launchd 常駐設定ファイルの整備**:
    - `config/com.user.voice-reflection.plist` および `bin/reflection-daemon.sh` を整備完了。
-5. **[ ] Step 5: iPhone側キュー送信クライアントの構築（次回セッション）**:
-   - **Cloudflare Pages PWA（推奨）**: 単一HTML（Wake Lock画面スリープ防止、MediaRecorder録音、Gemini Flash文字起こし、GitHub Direct Commit）の実装。
+5. **[x] Step 5: iPhone側キュー送信クライアントの構築**:
+   - **Cloudflare Pages PWA（推奨）**: 単一HTML（`web/index.html`、Screen Wake Lockスリープ防止、MediaRecorder録音＋リアルタイム音量波形、Gemini Flash文字起こし、GitHub Direct Commit）の実装完了。
    - **iOSショートカット（代替）**: ボイスメモ共有からGitHub APIへキュー投入するレシピ作成。
+

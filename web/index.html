@@ -1,0 +1,1122 @@
+<!DOCTYPE html>
+<html lang="ja" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Voice Reflection</title>
+  
+  <!-- PWA Meta -->
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" type="image/svg+xml" href="./icon.svg">
+  <link rel="apple-touch-icon" href="./icon.svg">
+  <meta name="theme-color" content="#09090b">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Reflection">
+
+  <!-- Tailwind CSS & Lucide Icons -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#ecfdf5',
+              500: '#10b981',
+              600: '#059669',
+            }
+          },
+          animation: {
+            'pulse-slow': 'pulse 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            'ripple': 'ripple 2s linear infinite',
+          },
+          keyframes: {
+            ripple: {
+              '0%': { transform: 'scale(0.8)', opacity: '0.8' },
+              '100%': { transform: 'scale(2.2)', opacity: '0' },
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* iOS Safe Area & Full-height styling */
+    :root {
+      --sat: env(safe-area-inset-top, 0px);
+      --sab: env(safe-area-inset-bottom, 0px);
+    }
+    body {
+      padding-top: max(0.75rem, var(--sat));
+      padding-bottom: max(1rem, var(--sab));
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    input, textarea {
+      user-select: text;
+      -webkit-user-select: text;
+    }
+    /* Scrollbar styling */
+    ::-webkit-scrollbar {
+      width: 4px;
+      height: 4px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #27272a;
+      border-radius: 9999px;
+    }
+  </style>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen flex flex-col font-sans antialiased selection:bg-emerald-900 selection:text-emerald-100">
+
+  <!-- Top App Bar -->
+  <header class="px-4 py-2 flex items-center justify-between border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur sticky top-0 z-30">
+    <div class="flex items-center space-x-2.5">
+      <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-500 to-cyan-500 p-0.5 flex items-center justify-center shadow-lg shadow-emerald-950/50">
+        <div class="w-full h-full bg-zinc-950 rounded-[10px] flex items-center justify-center">
+          <i data-lucide="mic" class="w-4 h-4 text-emerald-400"></i>
+        </div>
+      </div>
+      <div>
+        <h1 class="text-sm font-semibold tracking-wide flex items-center gap-1.5 text-zinc-100">
+          Voice Reflection
+          <span class="text-[10px] font-normal px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">PWA</span>
+        </h1>
+      </div>
+    </div>
+
+    <!-- Right Header Actions -->
+    <div class="flex items-center space-x-1.5">
+      <!-- Wake Lock Indicator -->
+      <div id="wakeLockBadge" class="hidden items-center text-[11px] px-2 py-1 rounded-full bg-amber-950/60 border border-amber-800/60 text-amber-300 gap-1 animate-pulse">
+        <i data-lucide="sun-medium" class="w-3 h-3"></i>
+        <span class="text-[10px]">スリープ防止中</span>
+      </div>
+
+      <!-- History Button -->
+      <button id="historyBtn" class="p-2 rounded-xl text-zinc-400 hover:text-zinc-200 hover:bg-zinc-850 active:bg-zinc-800 transition" title="送信履歴">
+        <i data-lucide="history" class="w-5 h-5"></i>
+      </button>
+
+      <!-- Settings Button -->
+      <button id="settingsBtn" class="p-2 rounded-xl text-zinc-400 hover:text-zinc-200 hover:bg-zinc-850 active:bg-zinc-800 transition relative" title="設定">
+        <i data-lucide="settings" class="w-5 h-5"></i>
+        <span id="settingsAlertDot" class="hidden absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-zinc-950"></span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Notice Banner for Missing Config -->
+  <div id="setupBanner" class="hidden mx-4 mt-3 p-3 rounded-2xl bg-gradient-to-r from-amber-950/60 to-zinc-900 border border-amber-800/50 text-amber-200 text-xs flex items-center justify-between shadow-lg">
+    <div class="flex items-center space-x-2.5">
+      <i data-lucide="alert-circle" class="w-4 h-4 text-amber-400 shrink-0"></i>
+      <span>初期設定（GitHub PAT / Gemini API Key）を完了してください</span>
+    </div>
+    <button id="bannerOpenSettings" class="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-medium text-[11px] shrink-0 transition">
+      設定を開く
+    </button>
+  </div>
+
+  <!-- Main Container -->
+  <main class="flex-1 max-w-md w-full mx-auto px-4 py-4 flex flex-col justify-between">
+    
+    <!-- Top Information / Status Section -->
+    <div class="space-y-4">
+      <!-- Target Vault Badge -->
+      <div class="flex items-center justify-between text-xs px-3 py-2 rounded-xl bg-zinc-900/90 border border-zinc-800 text-zinc-400">
+        <div class="flex items-center space-x-2 truncate">
+          <i data-lucide="git-branch" class="w-3.5 h-3.5 text-zinc-500 shrink-0"></i>
+          <span class="truncate">送信先: <span id="targetRepoDisplay" class="text-zinc-200 font-mono">personal-vault</span> (<span id="targetBranchDisplay">main</span>)</span>
+        </div>
+        <span class="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 shrink-0 font-mono">00_Inbox/queue</span>
+      </div>
+
+      <!-- Recording Visualizer & Timer Section -->
+      <div class="relative bg-zinc-900/60 rounded-3xl p-6 border border-zinc-800/80 backdrop-blur flex flex-col items-center justify-center min-h-[200px] overflow-hidden shadow-2xl">
+        <!-- Visualizer Canvas -->
+        <canvas id="visualizerCanvas" class="w-full h-16 absolute inset-x-0 bottom-3 opacity-35 pointer-events-none"></canvas>
+
+        <!-- Dynamic Status Message -->
+        <div id="statusLabel" class="text-xs font-medium uppercase tracking-widest text-zinc-400 mb-2">
+          待機中
+        </div>
+
+        <!-- Timer Display -->
+        <div id="timerDisplay" class="text-4xl font-light tracking-wider font-mono text-zinc-200 mb-4 transition-all">
+          00:00
+        </div>
+
+        <!-- Audio Meter Bars (Small Visualizer) -->
+        <div id="meterContainer" class="flex items-center gap-1.5 h-8 opacity-40">
+          <span class="w-1 bg-emerald-500 rounded-full h-2 transition-all duration-75"></span>
+          <span class="w-1 bg-emerald-500 rounded-full h-3 transition-all duration-75"></span>
+          <span class="w-1 bg-emerald-500 rounded-full h-4 transition-all duration-75"></span>
+          <span class="w-1 bg-emerald-500 rounded-full h-2 transition-all duration-75"></span>
+          <span class="w-1 bg-emerald-500 rounded-full h-5 transition-all duration-75"></span>
+        </div>
+
+        <!-- Audio Playback Preview (Shown when recording finished) -->
+        <div id="audioPlaybackBox" class="hidden w-full mt-4 pt-3 border-t border-zinc-800/60 flex flex-col items-center gap-2">
+          <audio id="audioPreview" controls class="w-full h-10 rounded-lg filter invert-[0.85] opacity-90"></audio>
+        </div>
+      </div>
+    </div>
+
+    <!-- Center Interactive Area: Record Button -->
+    <div class="my-6 flex flex-col items-center justify-center">
+      <div class="relative flex items-center justify-center">
+        <!-- Ripple Effect on Recording -->
+        <div id="recordRipple" class="hidden absolute w-32 h-32 rounded-full bg-emerald-500/25 animate-ripple pointer-events-none"></div>
+        <div id="recordRipple2" class="hidden absolute w-32 h-32 rounded-full bg-cyan-500/20 animate-ripple delay-500 pointer-events-none"></div>
+
+        <!-- Main Action Button -->
+        <button id="mainRecordBtn" class="relative z-10 w-24 h-24 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 active:scale-95 shadow-xl shadow-emerald-950/60 flex items-center justify-center text-zinc-950 transition-all duration-300">
+          <i id="mainRecordIcon" data-lucide="mic" class="w-10 h-10 transition-transform"></i>
+        </button>
+      </div>
+
+      <!-- Action Subtitle / Guidance -->
+      <p id="actionGuide" class="text-xs text-zinc-400 mt-4 text-center">
+        ボタンをタップして録音開始<br>
+        <span class="text-[11px] text-zinc-500">（画面は自動的にスリープ防止されます）</span>
+      </p>
+
+      <!-- Recording Secondary Controls (Pause, Cancel) -->
+      <div id="secondaryControls" class="hidden mt-4 flex items-center space-x-6">
+        <button id="cancelRecordBtn" class="p-3 rounded-full bg-zinc-850 hover:bg-zinc-800 text-zinc-400 hover:text-red-400 transition" title="破棄してリセット">
+          <i data-lucide="trash-2" class="w-5 h-5"></i>
+        </button>
+        <button id="pauseRecordBtn" class="p-3 rounded-full bg-zinc-850 hover:bg-zinc-800 text-zinc-300 hover:text-white transition" title="一時停止/再開">
+          <i id="pauseRecordIcon" data-lucide="pause" class="w-5 h-5"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Bottom Result & Processing Area -->
+    <div class="space-y-3">
+      <!-- Loading Card (Gemini Transcribing / GitHub Committing) -->
+      <div id="loadingCard" class="hidden p-5 rounded-2xl bg-zinc-900 border border-zinc-800 text-center space-y-3">
+        <div class="inline-block animate-spin rounded-full h-8 w-8 border-2 border-emerald-500 border-t-transparent"></div>
+        <p id="loadingMessage" class="text-sm font-medium text-zinc-200">Gemini Flash で音声を文字起こし中...</p>
+        <p class="text-[11px] text-zinc-500">高速・高精度な言語モデルが忠実にテキスト化しています</p>
+      </div>
+
+      <!-- Textarea / Transcription Preview Section -->
+      <div id="transcriptionCard" class="hidden bg-zinc-900/90 rounded-2xl p-4 border border-zinc-800 shadow-xl space-y-3">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-emerald-400 flex items-center gap-1.5">
+            <i data-lucide="sparkles" class="w-3.5 h-3.5"></i> 文字起こし生テキスト
+          </span>
+          <span id="charCount" class="text-[11px] text-zinc-500 font-mono">0 文字</span>
+        </div>
+
+        <textarea id="transcriptionInput" rows="5" placeholder="文字起こしテキストがここに表示されます（手動編集も可能）" class="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl p-3 text-xs leading-relaxed text-zinc-200 focus:outline-none focus:border-emerald-500 resize-none font-sans transition"></textarea>
+
+        <!-- Submission Buttons -->
+        <div class="flex items-center space-x-2">
+          <button id="discardBtn" class="flex-1 py-2.5 px-3 rounded-xl bg-zinc-800 hover:bg-zinc-750 active:bg-zinc-700 text-zinc-300 text-xs font-medium transition flex items-center justify-center gap-1.5">
+            <i data-lucide="x" class="w-4 h-4 text-zinc-400"></i> やり直す
+          </button>
+          <button id="commitBtn" class="flex-[2] py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-zinc-950 text-xs font-semibold shadow-lg shadow-emerald-950/40 active:scale-98 transition flex items-center justify-center gap-1.5">
+            <i data-lucide="send" class="w-4 h-4"></i> キュー送信（GitHub）
+          </button>
+        </div>
+      </div>
+
+      <!-- Success Card (Committed to Queue) -->
+      <div id="successCard" class="hidden p-5 rounded-2xl bg-gradient-to-br from-emerald-950/60 to-zinc-900 border border-emerald-800/60 text-center space-y-3 shadow-2xl">
+        <div class="w-12 h-12 mx-auto rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center ring-4 ring-emerald-500/10">
+          <i data-lucide="check" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <h3 class="text-sm font-semibold text-zinc-100">GitHub Queue に送信完了！</h3>
+          <p class="text-xs text-zinc-400 mt-1">
+            MacBookの常駐デーモンが検知し、<span class="text-emerald-400 font-medium">agy (Gemini 3.5+)</span> が深層リフレクションを自動生成します。
+          </p>
+        </div>
+        <div class="pt-1">
+          <button id="nextRecordBtn" class="w-full py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-750 text-xs text-zinc-200 font-medium transition">
+            次の録音へ
+          </button>
+        </div>
+      </div>
+
+      <!-- Quick Manual Input Toggle (When user wants to type or use iOS dictation directly) -->
+      <div id="manualInputToggleBox" class="text-center pt-2">
+        <button id="toggleManualInputBtn" class="text-[11px] text-zinc-400 hover:text-zinc-300 underline underline-offset-4 transition">
+          直接テキスト入力 / iOS音声入力を使用する
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <!-- ================= SETTINGS MODAL ================= -->
+  <div id="settingsModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-end sm:items-center justify-center p-0 sm:p-4 transition-opacity">
+    <div class="w-full max-w-md bg-zinc-900 border-t sm:border border-zinc-800 rounded-t-3xl sm:rounded-3xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+      <!-- Modal Header -->
+      <div class="px-5 py-4 border-b border-zinc-800 flex items-center justify-between">
+        <h2 class="text-sm font-semibold text-zinc-100 flex items-center gap-2">
+          <i data-lucide="sliders" class="w-4 h-4 text-emerald-400"></i> 設定（端末内のみ保存）
+        </h2>
+        <button id="closeSettingsBtn" class="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="p-5 space-y-4 overflow-y-auto flex-1 text-xs">
+        
+        <!-- GitHub Settings Group -->
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="font-semibold text-zinc-200 flex items-center gap-1.5">
+              <i data-lucide="github" class="w-3.5 h-3.5 text-zinc-400"></i> GitHub 連携 (Queue用)
+            </span>
+          </div>
+
+          <div>
+            <label class="block text-[11px] text-zinc-400 mb-1">Personal Access Token (PAT)</label>
+            <div class="relative">
+              <input type="password" id="inputGithubToken" placeholder="ghp_xxxx または github_pat_xxxx" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-zinc-200 focus:outline-none focus:border-emerald-500 font-mono text-[11px]">
+              <button type="button" id="toggleTokenVisibility" class="absolute right-2.5 top-2 text-zinc-500 hover:text-zinc-300">
+                <i data-lucide="eye" class="w-4 h-4"></i>
+              </button>
+            </div>
+            <p class="text-[10px] text-zinc-500 mt-1">※ `repo` または `Contents: Read and write` 権限が必要です</p>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-[11px] text-zinc-400 mb-1">Owner</label>
+              <input type="text" id="inputGithubOwner" placeholder="hatomachi" value="hatomachi" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-zinc-200 focus:outline-none focus:border-emerald-500 font-mono text-[11px]">
+            </div>
+            <div>
+              <label class="block text-[11px] text-zinc-400 mb-1">Repository</label>
+              <input type="text" id="inputGithubRepo" placeholder="personal-vault" value="personal-vault" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-zinc-200 focus:outline-none focus:border-emerald-500 font-mono text-[11px]">
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-[11px] text-zinc-400 mb-1">Branch</label>
+            <input type="text" id="inputGithubBranch" placeholder="main" value="main" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-zinc-200 focus:outline-none focus:border-emerald-500 font-mono text-[11px]">
+          </div>
+        </div>
+
+        <hr class="border-zinc-800">
+
+        <!-- Gemini API Group -->
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="font-semibold text-zinc-200 flex items-center gap-1.5">
+              <i data-lucide="sparkles" class="w-3.5 h-3.5 text-cyan-400"></i> Gemini API (文字起こし用)
+            </span>
+          </div>
+
+          <div>
+            <label class="block text-[11px] text-zinc-400 mb-1">Google AI Studio API Key</label>
+            <div class="relative">
+              <input type="password" id="inputGeminiApiKey" placeholder="AIzaSy..." class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-zinc-200 focus:outline-none focus:border-emerald-500 font-mono text-[11px]">
+              <button type="button" id="toggleGeminiKeyVisibility" class="absolute right-2.5 top-2 text-zinc-500 hover:text-zinc-300">
+                <i data-lucide="eye" class="w-4 h-4"></i>
+              </button>
+            </div>
+            <p class="text-[10px] text-zinc-500 mt-1">※ aistudio.google.com で無料取得可能</p>
+          </div>
+
+          <div>
+            <label class="block text-[11px] text-zinc-400 mb-1">Model</label>
+            <select id="selectGeminiModel" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-zinc-200 focus:outline-none focus:border-emerald-500 text-[11px]">
+              <option value="gemini-2.0-flash">gemini-2.0-flash (推奨・爆速・最新)</option>
+              <option value="gemini-1.5-flash">gemini-1.5-flash (標準)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Connection Test Result -->
+        <div id="testResultBox" class="hidden p-3 rounded-xl text-[11px]"></div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="px-5 py-4 border-t border-zinc-800 bg-zinc-950/60 flex items-center justify-between gap-2">
+        <button id="testConnectionBtn" class="py-2 px-3 rounded-xl bg-zinc-800 hover:bg-zinc-750 text-zinc-300 text-xs font-medium transition flex items-center gap-1">
+          <i data-lucide="network" class="w-3.5 h-3.5"></i> 接続テスト
+        </button>
+        <button id="saveSettingsBtn" class="py-2 px-5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-semibold shadow-md transition">
+          保存する
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= HISTORY MODAL ================= -->
+  <div id="historyModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-end sm:items-center justify-center p-0 sm:p-4">
+    <div class="w-full max-w-md bg-zinc-900 border-t sm:border border-zinc-800 rounded-t-3xl sm:rounded-3xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+      <div class="px-5 py-4 border-b border-zinc-800 flex items-center justify-between">
+        <h2 class="text-sm font-semibold text-zinc-100 flex items-center gap-2">
+          <i data-lucide="history" class="w-4 h-4 text-emerald-400"></i> 直近の送信履歴（端末保存）
+        </h2>
+        <button id="closeHistoryBtn" class="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <div id="historyList" class="p-5 space-y-3 overflow-y-auto flex-1 text-xs">
+        <!-- Dynamically injected -->
+      </div>
+      <div class="px-5 py-3 border-t border-zinc-800 bg-zinc-950/60 text-right">
+        <button id="clearHistoryBtn" class="text-[11px] text-zinc-500 hover:text-red-400 transition">
+          履歴をクリア
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="fixed bottom-6 inset-x-4 max-w-sm mx-auto z-50 bg-zinc-850 border border-zinc-700 text-zinc-100 px-4 py-2.5 rounded-2xl shadow-2xl flex items-center gap-2 text-xs opacity-0 pointer-events-none transition-all duration-300 translate-y-2">
+    <i id="toastIcon" data-lucide="info" class="w-4 h-4 text-emerald-400 shrink-0"></i>
+    <span id="toastMsg" class="flex-1">通知メッセージ</span>
+  </div>
+
+  <!-- Main Logic Script -->
+  <script>
+    // State Variables
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let audioBlob = null;
+    let audioUrl = null;
+    let recordStartTime = null;
+    let timerInterval = null;
+    let wakeLock = null;
+    let audioContext = null;
+    let analyserNode = null;
+    let visualizerAnimId = null;
+    let isPaused = false;
+
+    // Config Keys
+    const CONFIG_KEY = 'voice_reflection_config_v1';
+    const HISTORY_KEY = 'voice_reflection_history_v1';
+
+    const defaultConfig = {
+      githubToken: '',
+      githubOwner: 'hatomachi',
+      githubRepo: 'personal-vault',
+      githubBranch: 'main',
+      geminiApiKey: '',
+      geminiModel: 'gemini-2.0-flash'
+    };
+
+    function getConfig() {
+      try {
+        const raw = localStorage.getItem(CONFIG_KEY);
+        return raw ? { ...defaultConfig, ...JSON.parse(raw) } : defaultConfig;
+      } catch (e) {
+        return defaultConfig;
+      }
+    }
+
+    function saveConfig(cfg) {
+      localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg));
+      updateDisplayWithConfig();
+    }
+
+    function getHistory() {
+      try {
+        const raw = localStorage.getItem(HISTORY_KEY);
+        return raw ? JSON.parse(raw) : [];
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function addHistoryItem(item) {
+      const hist = getHistory();
+      hist.unshift(item);
+      if (hist.length > 20) hist.pop(); // keep last 20
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(hist));
+    }
+
+    // UI Toast
+    function showToast(message, type = 'info') {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toastMsg');
+      const toastIcon = document.getElementById('toastIcon');
+      
+      toastMsg.innerText = message;
+      if (type === 'error') {
+        toastIcon.setAttribute('data-lucide', 'alert-triangle');
+        toastIcon.className = 'w-4 h-4 text-red-400 shrink-0';
+      } else if (type === 'success') {
+        toastIcon.setAttribute('data-lucide', 'check-circle');
+        toastIcon.className = 'w-4 h-4 text-emerald-400 shrink-0';
+      } else {
+        toastIcon.setAttribute('data-lucide', 'info');
+        toastIcon.className = 'w-4 h-4 text-cyan-400 shrink-0';
+      }
+      lucide.createIcons();
+
+      toast.classList.remove('opacity-0', 'pointer-events-none', 'translate-y-2');
+      toast.classList.add('opacity-100', 'translate-y-0');
+
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'pointer-events-none', 'translate-y-2');
+        toast.classList.remove('opacity-100', 'translate-y-0');
+      }, 3500);
+    }
+
+    // Screen Wake Lock Handler
+    async function acquireWakeLock() {
+      if ('wakeLock' in navigator) {
+        try {
+          wakeLock = await navigator.wakeLock.request('screen');
+          document.getElementById('wakeLockBadge').classList.remove('hidden');
+          document.getElementById('wakeLockBadge').classList.add('flex');
+          wakeLock.addEventListener('release', () => {
+            document.getElementById('wakeLockBadge').classList.add('hidden');
+            document.getElementById('wakeLockBadge').classList.remove('flex');
+          });
+        } catch (err) {
+          console.warn('Wake Lock request failed:', err);
+        }
+      }
+    }
+
+    async function releaseWakeLock() {
+      if (wakeLock) {
+        try {
+          await wakeLock.release();
+        } catch (e) {}
+        wakeLock = null;
+      }
+      document.getElementById('wakeLockBadge').classList.add('hidden');
+      document.getElementById('wakeLockBadge').classList.remove('flex');
+    }
+
+    // Re-acquire Wake Lock on visibility change if recording
+    document.addEventListener('visibilitychange', async () => {
+      if (document.visibilityState === 'visible' && mediaRecorder && mediaRecorder.state === 'recording') {
+        await acquireWakeLock();
+      }
+    });
+
+    // Audio MIME type detector
+    function getSupportedMimeType() {
+      const types = [
+        'audio/mp4;codecs=mp4a.40.2',
+        'audio/mp4',
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/ogg;codecs=opus',
+        'audio/wav'
+      ];
+      for (const t of types) {
+        if (MediaRecorder.isTypeSupported(t)) {
+          return t;
+        }
+      }
+      return '';
+    }
+
+    // Base64 & UTF-8 Safe Utilities (Same as webapp-obsidian)
+    function utf8ToBase64(str) {
+      const bytes = new TextEncoder().encode(str);
+      let binary = '';
+      const len = bytes.byteLength;
+      for (let i = 0; i < len; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      return window.btoa(binary);
+    }
+
+    function blobToBase64(blob) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          // Format: data:audio/mp4;base64,AAAA...
+          const base64data = reader.result.split(',')[1];
+          resolve(base64data);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    }
+
+    // Canvas Visualizer
+    function setupVisualizer(stream) {
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        audioContext = new AudioCtx();
+        const source = audioContext.createMediaStreamSource(stream);
+        analyserNode = audioContext.createAnalyser();
+        analyserNode.fftSize = 64;
+        source.connect(analyserNode);
+
+        const canvas = document.getElementById('visualizerCanvas');
+        const ctx = canvas.getContext('2d');
+        const dataArray = new Uint8Array(analyserNode.frequencyBinCount);
+
+        function render() {
+          visualizerAnimId = requestAnimationFrame(render);
+          analyserNode.getByteFrequencyData(dataArray);
+
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          const barWidth = (canvas.width / dataArray.length) * 1.5;
+          let x = 0;
+
+          for (let i = 0; i < dataArray.length; i++) {
+            const barHeight = (dataArray[i] / 255) * canvas.height;
+            const gradient = ctx.createLinearGradient(0, canvas.height, 0, 0);
+            gradient.addColorStop(0, '#10b981');
+            gradient.addColorStop(1, '#06b6d4');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(x, canvas.height - barHeight, barWidth - 2, barHeight);
+            x += barWidth;
+          }
+        }
+        render();
+      } catch (e) {
+        console.warn('Audio visualizer setup failed', e);
+      }
+    }
+
+    function stopVisualizer() {
+      if (visualizerAnimId) cancelAnimationFrame(visualizerAnimId);
+      if (audioContext && audioContext.state !== 'closed') {
+        audioContext.close().catch(() => {});
+      }
+    }
+
+    // Timer format
+    function updateTimer() {
+      const elapsed = Math.floor((Date.now() - recordStartTime) / 1000);
+      const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');
+      const ss = String(elapsed % 60).padStart(2, '0');
+      document.getElementById('timerDisplay').innerText = `${mm}:${ss}`;
+    }
+
+    // Recording Controls
+    async function startRecording() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mimeType = getSupportedMimeType();
+        const options = mimeType ? { mimeType } : {};
+        
+        mediaRecorder = new MediaRecorder(stream, options);
+        audioChunks = [];
+
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) {
+            audioChunks.push(e.data);
+          }
+        };
+
+        mediaRecorder.onstop = () => {
+          audioBlob = new Blob(audioChunks, { type: mimeType || 'audio/mp4' });
+          if (audioUrl) URL.revokeObjectURL(audioUrl);
+          audioUrl = URL.createObjectURL(audioBlob);
+          document.getElementById('audioPreview').src = audioUrl;
+          document.getElementById('audioPlaybackBox').classList.remove('hidden');
+
+          // Stop all audio tracks
+          stream.getTracks().forEach(t => t.stop());
+          stopVisualizer();
+          releaseWakeLock();
+
+          // Auto-trigger transcription
+          handleTranscription(audioBlob);
+        };
+
+        mediaRecorder.start(1000); // 1-sec chunks
+        recordStartTime = Date.now();
+        timerInterval = setInterval(updateTimer, 500);
+
+        await acquireWakeLock();
+        setupVisualizer(stream);
+
+        // Update UI State: Recording
+        setUIState('recording');
+
+      } catch (err) {
+        console.error('Failed to start recording:', err);
+        showToast('マイクへのアクセスを許可してください', 'error');
+      }
+    }
+
+    function stopRecording() {
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+        clearInterval(timerInterval);
+      }
+    }
+
+    function cancelRecording() {
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.onstop = null; // Suppress finish callback
+        mediaRecorder.stop();
+        if (mediaRecorder.stream) {
+          mediaRecorder.stream.getTracks().forEach(t => t.stop());
+        }
+      }
+      clearInterval(timerInterval);
+      stopVisualizer();
+      releaseWakeLock();
+      resetRecordingUI();
+      showToast('録音を取り消しました');
+    }
+
+    function togglePauseRecording() {
+      if (!mediaRecorder) return;
+      if (mediaRecorder.state === 'recording') {
+        mediaRecorder.pause();
+        isPaused = true;
+        document.getElementById('statusLabel').innerText = '一時停止中';
+        document.getElementById('pauseRecordIcon').setAttribute('data-lucide', 'play');
+        lucide.createIcons();
+      } else if (mediaRecorder.state === 'paused') {
+        mediaRecorder.resume();
+        isPaused = false;
+        document.getElementById('statusLabel').innerText = '録音中...';
+        document.getElementById('pauseRecordIcon').setAttribute('data-lucide', 'pause');
+        lucide.createIcons();
+      }
+    }
+
+    function resetRecordingUI() {
+      clearInterval(timerInterval);
+      document.getElementById('timerDisplay').innerText = '00:00';
+      document.getElementById('audioPlaybackBox').classList.add('hidden');
+      document.getElementById('transcriptionCard').classList.add('hidden');
+      document.getElementById('loadingCard').classList.add('hidden');
+      document.getElementById('successCard').classList.add('hidden');
+      document.getElementById('transcriptionInput').value = '';
+      setUIState('idle');
+    }
+
+    function setUIState(state) {
+      const mainBtn = document.getElementById('mainRecordBtn');
+      const mainIcon = document.getElementById('mainRecordIcon');
+      const ripple = document.getElementById('recordRipple');
+      const ripple2 = document.getElementById('recordRipple2');
+      const statusLabel = document.getElementById('statusLabel');
+      const actionGuide = document.getElementById('actionGuide');
+      const secondaryControls = document.getElementById('secondaryControls');
+
+      if (state === 'recording') {
+        statusLabel.innerText = '録音中...';
+        statusLabel.className = 'text-xs font-semibold uppercase tracking-widest text-emerald-400 animate-pulse mb-2';
+        mainBtn.className = 'relative z-10 w-24 h-24 rounded-full bg-red-500 hover:bg-red-400 active:scale-95 shadow-xl shadow-red-950/60 flex items-center justify-center text-white transition-all duration-300';
+        mainIcon.setAttribute('data-lucide', 'square');
+        ripple.classList.remove('hidden');
+        ripple2.classList.remove('hidden');
+        secondaryControls.classList.remove('hidden');
+        actionGuide.innerHTML = 'タップして録音完了・文字起こしへ<br><span class="text-[11px] text-zinc-500">思いつくままに内省を吐き出してください</span>';
+      } else if (state === 'processing') {
+        statusLabel.innerText = '処理中';
+        statusLabel.className = 'text-xs font-medium uppercase tracking-widest text-cyan-400 mb-2';
+        mainBtn.className = 'relative z-10 w-24 h-24 rounded-full bg-zinc-800 text-zinc-500 cursor-not-allowed flex items-center justify-center';
+        mainIcon.setAttribute('data-lucide', 'loader-2');
+        mainIcon.classList.add('animate-spin');
+        ripple.classList.add('hidden');
+        ripple2.classList.add('hidden');
+        secondaryControls.classList.add('hidden');
+      } else {
+        // Idle
+        statusLabel.innerText = '待機中';
+        statusLabel.className = 'text-xs font-medium uppercase tracking-widest text-zinc-400 mb-2';
+        mainBtn.className = 'relative z-10 w-24 h-24 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 active:scale-95 shadow-xl shadow-emerald-950/60 flex items-center justify-center text-zinc-950 transition-all duration-300';
+        mainIcon.setAttribute('data-lucide', 'mic');
+        mainIcon.classList.remove('animate-spin');
+        ripple.classList.add('hidden');
+        ripple2.classList.add('hidden');
+        secondaryControls.classList.add('hidden');
+        actionGuide.innerHTML = 'ボタンをタップして録音開始<br><span class="text-[11px] text-zinc-500">（画面は自動的にスリープ防止されます）</span>';
+      }
+      lucide.createIcons();
+    }
+
+    // Gemini API Transcription
+    async function handleTranscription(blob) {
+      const cfg = getConfig();
+      if (!cfg.geminiApiKey) {
+        showToast('Gemini API Key が未設定です。手動入力または設定を行ってください', 'error');
+        openSettings();
+        document.getElementById('transcriptionCard').classList.remove('hidden');
+        setUIState('idle');
+        return;
+      }
+
+      setUIState('processing');
+      document.getElementById('loadingCard').classList.remove('hidden');
+      document.getElementById('loadingMessage').innerText = 'Gemini Flash で音声を文字起こし中...';
+
+      try {
+        const base64Audio = await blobToBase64(blob);
+        const mimeType = blob.type || 'audio/mp4';
+        const model = cfg.geminiModel || 'gemini-2.0-flash';
+
+        const promptText = `
+以下の音声を忠実に日本語で文字起こししてください。
+言い淀みや「えーと」「その」などの相槌・つぶやきも省略せず、話した内容をありのまま自然な日本語テキストにしてください。
+前置きや挨拶、注釈、Markdownコードブロック等は一切含めず、文字起こしされたテキストのみを出力してください。
+`;
+
+        const requestUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${cfg.geminiApiKey}`;
+
+        const response = await fetch(requestUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{
+              parts: [
+                {
+                  inlineData: {
+                    mimeType: mimeType,
+                    data: base64Audio
+                  }
+                },
+                { text: promptText }
+              ]
+            }]
+          })
+        });
+
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.error?.message || `Gemini API エラー (Status: ${response.status})`);
+        }
+
+        const data = await response.json();
+        const transcription = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+
+        document.getElementById('loadingCard').classList.add('hidden');
+        document.getElementById('transcriptionCard').classList.remove('hidden');
+        document.getElementById('transcriptionInput').value = transcription;
+        updateCharCount();
+
+        showToast('文字起こしが完了しました！', 'success');
+
+      } catch (err) {
+        console.error('Transcription failed:', err);
+        document.getElementById('loadingCard').classList.add('hidden');
+        document.getElementById('transcriptionCard').classList.remove('hidden');
+        showToast('文字起こしに失敗しました: ' + err.message, 'error');
+      } finally {
+        setUIState('idle');
+      }
+    }
+
+    function updateCharCount() {
+      const text = document.getElementById('transcriptionInput').value;
+      document.getElementById('charCount').innerText = `${text.length} 文字`;
+    }
+
+    // Direct Commit to GitHub Queue
+    async function commitToGitHubQueue() {
+      const cfg = getConfig();
+      const rawText = document.getElementById('transcriptionInput').value.trim();
+
+      if (!rawText) {
+        showToast('テキストが空です', 'error');
+        return;
+      }
+      if (!cfg.githubToken) {
+        showToast('GitHub Personal Access Token (PAT) を設定してください', 'error');
+        openSettings();
+        return;
+      }
+
+      setUIState('processing');
+      document.getElementById('loadingCard').classList.remove('hidden');
+      document.getElementById('loadingMessage').innerText = 'GitHub personal-vault のキューにコミット中...';
+
+      try {
+        const now = new Date();
+        const yyyy = now.getFullYear();
+        const mm = String(now.getMonth() + 1).padStart(2, '0');
+        const dd = String(now.getDate()).padStart(2, '0');
+        const hh = String(now.getHours()).padStart(2, '0');
+        const mi = String(now.getMinutes()).padStart(2, '0');
+        const ss = String(now.getSeconds()).padStart(2, '0');
+
+        const dateStr = `${yyyy}-${mm}-${dd}`;
+        const filename = `${yyyy}-${mm}-${dd}-${hh}${mi}${ss}.json`;
+        const filePath = `00_Inbox/queue/${filename}`;
+
+        const queuePayload = {
+          text: rawText,
+          timestamp: now.toISOString(),
+          date: dateStr,
+          source: 'web-pwa'
+        };
+
+        const jsonContent = JSON.stringify(queuePayload, null, 2);
+        const base64Content = utf8ToBase64(jsonContent);
+
+        const commitUrl = `https://api.github.com/repos/${cfg.githubOwner}/${cfg.githubRepo}/contents/${filePath}`;
+
+        const response = await fetch(commitUrl, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${cfg.githubToken}`,
+            'Accept': 'application/vnd.github.v3+json',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            message: `feat(queue): new voice reflection queue (${filename})`,
+            content: base64Content,
+            branch: cfg.githubBranch || 'main'
+          })
+        });
+
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.message || `GitHub API エラー (Status: ${response.status})`);
+        }
+
+        // Save to local history
+        addHistoryItem({
+          filename: filename,
+          date: dateStr,
+          timestamp: now.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }),
+          preview: rawText.slice(0, 80) + (rawText.length > 80 ? '...' : ''),
+          length: rawText.length
+        });
+
+        document.getElementById('loadingCard').classList.add('hidden');
+        document.getElementById('transcriptionCard').classList.add('hidden');
+        document.getElementById('successCard').classList.remove('hidden');
+
+        showToast('キューに送信完了！agyが自律生成します', 'success');
+
+      } catch (err) {
+        console.error('Commit failed:', err);
+        document.getElementById('loadingCard').classList.add('hidden');
+        showToast('GitHub送信エラー: ' + err.message, 'error');
+      } finally {
+        setUIState('idle');
+      }
+    }
+
+    // Modal & Settings Helpers
+    function openSettings() {
+      const cfg = getConfig();
+      document.getElementById('inputGithubToken').value = cfg.githubToken;
+      document.getElementById('inputGithubOwner').value = cfg.githubOwner;
+      document.getElementById('inputGithubRepo').value = cfg.githubRepo;
+      document.getElementById('inputGithubBranch').value = cfg.githubBranch;
+      document.getElementById('inputGeminiApiKey').value = cfg.geminiApiKey;
+      document.getElementById('selectGeminiModel').value = cfg.geminiModel;
+
+      document.getElementById('testResultBox').classList.add('hidden');
+      document.getElementById('settingsModal').classList.remove('hidden');
+      document.getElementById('settingsModal').classList.add('flex');
+    }
+
+    function closeSettings() {
+      document.getElementById('settingsModal').classList.add('hidden');
+      document.getElementById('settingsModal').classList.remove('flex');
+    }
+
+    function openHistory() {
+      const hist = getHistory();
+      const listEl = document.getElementById('historyList');
+      if (hist.length === 0) {
+        listEl.innerHTML = '<div class="text-center py-8 text-zinc-500">送信履歴はありません</div>';
+      } else {
+        listEl.innerHTML = hist.map(item => `
+          <div class="p-3 rounded-xl bg-zinc-950 border border-zinc-800 space-y-1">
+            <div class="flex items-center justify-between text-[11px] text-zinc-400">
+              <span class="font-mono text-emerald-400">${item.date} ${item.timestamp}</span>
+              <span class="text-zinc-500 font-mono">${item.length} 文字</span>
+            </div>
+            <p class="text-zinc-300 text-[12px] leading-relaxed line-clamp-2">${item.preview}</p>
+          </div>
+        `).join('');
+      }
+      document.getElementById('historyModal').classList.remove('hidden');
+      document.getElementById('historyModal').classList.add('flex');
+    }
+
+    function closeHistory() {
+      document.getElementById('historyModal').classList.add('hidden');
+      document.getElementById('historyModal').classList.remove('flex');
+    }
+
+    function updateDisplayWithConfig() {
+      const cfg = getConfig();
+      document.getElementById('targetRepoDisplay').innerText = cfg.githubRepo;
+      document.getElementById('targetBranchDisplay').innerText = cfg.githubBranch;
+
+      const isMissing = !cfg.githubToken || !cfg.geminiApiKey;
+      const banner = document.getElementById('setupBanner');
+      const dot = document.getElementById('settingsAlertDot');
+      if (isMissing) {
+        banner.classList.remove('hidden');
+        dot.classList.remove('hidden');
+      } else {
+        banner.classList.add('hidden');
+        dot.classList.add('hidden');
+      }
+    }
+
+    // Connection Test
+    async function runConnectionTest() {
+      const token = document.getElementById('inputGithubToken').value.trim();
+      const owner = document.getElementById('inputGithubOwner').value.trim();
+      const repo = document.getElementById('inputGithubRepo').value.trim();
+      const apiKey = document.getElementById('inputGeminiApiKey').value.trim();
+      const model = document.getElementById('selectGeminiModel').value;
+
+      const resultBox = document.getElementById('testResultBox');
+      resultBox.classList.remove('hidden');
+      resultBox.className = 'p-3 rounded-xl text-[11px] bg-zinc-950 border border-zinc-800 text-zinc-400 space-y-1.5';
+      resultBox.innerHTML = '<div class="flex items-center gap-1.5"><i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> 接続テスト中...</div>';
+      lucide.createIcons();
+
+      let githubSuccess = false;
+      let geminiSuccess = false;
+      let details = [];
+
+      // Test GitHub
+      if (token) {
+        try {
+          const res = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Accept': 'application/vnd.github.v3+json'
+            }
+          });
+          if (res.ok) {
+            githubSuccess = true;
+            const data = await res.json();
+            details.push(`✅ GitHub: 接続成功 (${data.full_name}, ${data.private ? 'Private' : 'Public'})`);
+          } else {
+            details.push(`❌ GitHub: 失敗 (Status ${res.status})`);
+          }
+        } catch (e) {
+          details.push(`❌ GitHub: 通信エラー (${e.message})`);
+        }
+      } else {
+        details.push(`⚠️ GitHub Token 未入力`);
+      }
+
+      // Test Gemini
+      if (apiKey) {
+        try {
+          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: "Hello" }] }]
+            })
+          });
+          if (res.ok) {
+            geminiSuccess = true;
+            details.push(`✅ Gemini API: 接続成功 (${model})`);
+          } else {
+            details.push(`❌ Gemini API: 失敗 (Status ${res.status})`);
+          }
+        } catch (e) {
+          details.push(`❌ Gemini API: 通信エラー (${e.message})`);
+        }
+      } else {
+        details.push(`⚠️ Gemini API Key 未入力`);
+      }
+
+      const allOk = githubSuccess && geminiSuccess;
+      resultBox.className = `p-3 rounded-xl text-[11px] border ${allOk ? 'bg-emerald-950/40 border-emerald-800 text-emerald-300' : 'bg-zinc-950 border-zinc-800 text-zinc-300'}`;
+      resultBox.innerHTML = details.join('<br>');
+    }
+
+    // Event Listeners
+    window.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      updateDisplayWithConfig();
+
+      // Register Service Worker for PWA
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./sw.js').catch(err => {
+          console.warn('SW registration failed:', err);
+        });
+      }
+
+      // Record Button Click
+      document.getElementById('mainRecordBtn').addEventListener('click', () => {
+        if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+          startRecording();
+        } else if (mediaRecorder.state === 'recording' || mediaRecorder.state === 'paused') {
+          stopRecording();
+        }
+      });
+
+      // Secondary controls
+      document.getElementById('cancelRecordBtn').addEventListener('click', cancelRecording);
+      document.getElementById('pauseRecordBtn').addEventListener('click', togglePauseRecording);
+
+      // Reset / Next Record
+      document.getElementById('discardBtn').addEventListener('click', resetRecordingUI);
+      document.getElementById('nextRecordBtn').addEventListener('click', resetRecordingUI);
+
+      // Commit
+      document.getElementById('commitBtn').addEventListener('click', commitToGitHubQueue);
+
+      // Manual Input Toggle
+      document.getElementById('toggleManualInputBtn').addEventListener('click', () => {
+        document.getElementById('transcriptionCard').classList.remove('hidden');
+        document.getElementById('transcriptionInput').focus();
+      });
+
+      document.getElementById('transcriptionInput').addEventListener('input', updateCharCount);
+
+      // Modals
+      document.getElementById('settingsBtn').addEventListener('click', openSettings);
+      document.getElementById('closeSettingsBtn').addEventListener('click', closeSettings);
+      document.getElementById('bannerOpenSettings').addEventListener('click', openSettings);
+
+      document.getElementById('historyBtn').addEventListener('click', openHistory);
+      document.getElementById('closeHistoryBtn').addEventListener('click', closeHistory);
+      document.getElementById('clearHistoryBtn').addEventListener('click', () => {
+        if (confirm('送信履歴を消去しますか？')) {
+          localStorage.removeItem(HISTORY_KEY);
+          openHistory();
+        }
+      });
+
+      // Settings Save
+      document.getElementById('saveSettingsBtn').addEventListener('click', () => {
+        saveConfig({
+          githubToken: document.getElementById('inputGithubToken').value.trim(),
+          githubOwner: document.getElementById('inputGithubOwner').value.trim() || 'hatomachi',
+          githubRepo: document.getElementById('inputGithubRepo').value.trim() || 'personal-vault',
+          githubBranch: document.getElementById('inputGithubBranch').value.trim() || 'main',
+          geminiApiKey: document.getElementById('inputGeminiApiKey').value.trim(),
+          geminiModel: document.getElementById('selectGeminiModel').value
+        });
+        closeSettings();
+        showToast('設定を保存しました', 'success');
+      });
+
+      // Test Connection
+      document.getElementById('testConnectionBtn').addEventListener('click', runConnectionTest);
+
+      // Password visibility toggles
+      document.getElementById('toggleTokenVisibility').addEventListener('click', () => {
+        const inp = document.getElementById('inputGithubToken');
+        inp.type = inp.type === 'password' ? 'text' : 'password';
+      });
+      document.getElementById('toggleGeminiKeyVisibility').addEventListener('click', () => {
+        const inp = document.getElementById('inputGeminiApiKey');
+        inp.type = inp.type === 'password' ? 'text' : 'password';
+      });
+    });
+  </script>
+</body>
+</html>
