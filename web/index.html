@@ -127,6 +127,25 @@
     </button>
   </div>
 
+  <!-- Notice Banner for Draft Recovery -->
+  <div id="draftRecoveryBanner" class="hidden mx-4 mt-3 p-3 rounded-2xl bg-gradient-to-r from-cyan-950/70 to-zinc-900 border border-cyan-800/50 text-cyan-200 text-xs flex items-center justify-between shadow-lg">
+    <div class="flex items-center space-x-2.5 min-w-0 pr-2">
+      <i data-lucide="archive-restore" class="w-4 h-4 text-cyan-400 shrink-0"></i>
+      <div class="truncate">
+        <div class="font-medium text-cyan-100 truncate">未送信の録音データがあります</div>
+        <div id="draftRecoveryInfo" class="text-[10px] text-cyan-300/80 truncate">前回の録音データを復元できます</div>
+      </div>
+    </div>
+    <div class="flex items-center space-x-1.5 shrink-0">
+      <button id="bannerDiscardDraft" class="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition" title="破棄">
+        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+      </button>
+      <button id="bannerRestoreDraft" class="px-2.5 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 font-medium text-[11px] transition">
+        復元する
+      </button>
+    </div>
+  </div>
+
   <!-- Main Container -->
   <main class="flex-1 max-w-md w-full mx-auto px-4 py-4 flex flex-col justify-between">
     
@@ -168,6 +187,16 @@
         <!-- Audio Playback Preview (Shown when recording finished) -->
         <div id="audioPlaybackBox" class="hidden w-full mt-4 pt-3 border-t border-zinc-800/60 flex flex-col items-center gap-2">
           <audio id="audioPreview" controls class="w-full h-10 rounded-lg filter invert-[0.85] opacity-90"></audio>
+          <div class="w-full flex items-center justify-between gap-2 pt-1">
+            <button id="saveAudioFileBtn" type="button" class="flex-1 flex items-center justify-center gap-1.5 text-[11px] font-medium text-zinc-300 hover:text-white bg-zinc-800 hover:bg-zinc-750 active:scale-98 px-3 py-1.5 rounded-xl border border-zinc-700/80 transition">
+              <i data-lucide="share" class="w-3.5 h-3.5 text-emerald-400"></i>
+              <span>iPhoneに音声を保存</span>
+            </button>
+            <button id="retryTranscribeBtn" type="button" class="flex-1 flex items-center justify-center gap-1.5 text-[11px] font-medium text-zinc-300 hover:text-white bg-zinc-800 hover:bg-zinc-750 active:scale-98 px-3 py-1.5 rounded-xl border border-zinc-700/80 transition">
+              <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-cyan-400"></i>
+              <span>再文字起こし</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -209,6 +238,40 @@
         <div class="inline-block animate-spin rounded-full h-8 w-8 border-2 border-emerald-500 border-t-transparent"></div>
         <p id="loadingMessage" class="text-sm font-medium text-zinc-200">Gemini Flash で音声を文字起こし中...</p>
         <p class="text-[11px] text-zinc-500">高速・高精度な言語モデルが忠実にテキスト化しています</p>
+      </div>
+
+      <!-- Transcription Error / Rescue Card (Gemini Failed) -->
+      <div id="transcriptionErrorCard" class="hidden p-4 rounded-2xl bg-gradient-to-br from-red-950/40 via-zinc-900 to-zinc-900 border border-red-800/60 shadow-xl space-y-3">
+        <div class="flex items-start space-x-2.5">
+          <div class="w-8 h-8 rounded-xl bg-red-500/20 text-red-400 flex items-center justify-center shrink-0 mt-0.5">
+            <i data-lucide="alert-triangle" class="w-4.5 h-4.5"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <h4 class="text-xs font-semibold text-red-200 flex items-center gap-1.5">
+              文字起こしに失敗しました
+            </h4>
+            <p id="transcriptionErrorMsg" class="text-[11px] text-zinc-400 mt-1 leading-relaxed break-words">
+              エラーが発生しました。録音データは安全に保持されています。
+            </p>
+          </div>
+        </div>
+
+        <!-- Rescue Action Buttons -->
+        <div class="grid grid-cols-2 gap-2 pt-1">
+          <button id="errorSaveAudioBtn" type="button" class="py-2.5 px-3 rounded-xl bg-zinc-800 hover:bg-zinc-750 active:scale-98 text-zinc-200 text-xs font-medium border border-zinc-700/80 transition flex items-center justify-center gap-1.5 shadow-md">
+            <i data-lucide="share" class="w-3.5 h-3.5 text-emerald-400"></i>
+            <span>音声を本体に保存</span>
+          </button>
+          <button id="errorRetryTranscribeBtn" type="button" class="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-98 text-white text-xs font-semibold shadow-lg shadow-emerald-950/40 transition flex items-center justify-center gap-1.5">
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+            <span>もう一度試す</span>
+          </button>
+        </div>
+        <div class="text-center pt-0.5">
+          <button id="errorManualInputBtn" type="button" class="text-[11px] text-zinc-400 hover:text-zinc-200 underline underline-offset-4 transition">
+            音声を聴きながら手動でテキストを入力する
+          </button>
+        </div>
       </div>
 
       <!-- Textarea / Transcription Preview Section -->
@@ -414,9 +477,81 @@
     let isPaused = false;
     let currentUsage = null;
 
-    // Config Keys
+    // Config & Storage Keys
     const CONFIG_KEY = 'voice_reflection_config_v1';
     const HISTORY_KEY = 'voice_reflection_history_v1';
+    const DB_NAME = 'voice_reflection_vault_db';
+    const DB_VERSION = 1;
+    const STORE_NAME = 'audio_drafts';
+
+    // IndexedDB for Audio Backup (Zero-Loss Safety Net)
+    function openDatabase() {
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME, DB_VERSION);
+        req.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains(STORE_NAME)) {
+            db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+          }
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    async function saveAudioDraft(blob, durationMs = 0) {
+      try {
+        const db = await openDatabase();
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        const record = {
+          id: 'latest_draft',
+          blob: blob,
+          mimeType: blob.type || 'audio/mp4',
+          timestamp: Date.now(),
+          durationMs: durationMs
+        };
+        store.put(record);
+        return new Promise((resolve) => {
+          tx.oncomplete = () => resolve(true);
+          tx.onerror = () => resolve(false);
+        });
+      } catch (e) {
+        console.warn('Failed to save audio draft to IndexedDB:', e);
+        return false;
+      }
+    }
+
+    async function getAudioDraft() {
+      try {
+        const db = await openDatabase();
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const store = tx.objectStore(STORE_NAME);
+        const req = store.get('latest_draft');
+        return new Promise((resolve) => {
+          req.onsuccess = () => resolve(req.result || null);
+          req.onerror = () => resolve(null);
+        });
+      } catch (e) {
+        console.warn('Failed to get audio draft from IndexedDB:', e);
+        return null;
+      }
+    }
+
+    async function clearAudioDraft() {
+      try {
+        const db = await openDatabase();
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        store.delete('latest_draft');
+        return new Promise((resolve) => {
+          tx.oncomplete = () => resolve(true);
+          tx.onerror = () => resolve(false);
+        });
+      } catch (e) {
+        return false;
+      }
+    }
 
     const defaultConfig = {
       githubToken: '',
@@ -605,6 +740,69 @@
       });
     }
 
+    // Device File Saver (iOS Web Share API & Download Fallback)
+    async function saveAudioToDevice(blob, customName = null) {
+      if (!blob) {
+        showToast('保存する録音データがありません', 'error');
+        return;
+      }
+
+      const now = new Date();
+      const yyyy = now.getFullYear();
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const dd = String(now.getDate()).padStart(2, '0');
+      const hh = String(now.getHours()).padStart(2, '0');
+      const mi = String(now.getMinutes()).padStart(2, '0');
+      const ss = String(now.getSeconds()).padStart(2, '0');
+
+      const mime = blob.type || 'audio/mp4';
+      let ext = 'm4a';
+      if (mime.includes('webm')) ext = 'webm';
+      else if (mime.includes('wav')) ext = 'wav';
+      else if (mime.includes('ogg')) ext = 'ogg';
+
+      const fileName = customName || `reflection_${yyyy}${mm}${dd}_${hh}${mi}${ss}.${ext}`;
+      const file = new File([blob], fileName, { type: mime });
+
+      // 1. Try iOS / Safari Web Share API with files (Share Sheet -> Save to Files)
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({
+            files: [file],
+            title: 'リフレクション録音データ',
+            text: `音声リフレクション録音ファイル (${fileName})`
+          });
+          showToast('共有メニューを開きました（"ファイルに保存" 等を選択可能）', 'success');
+          return;
+        } catch (err) {
+          if (err.name === 'AbortError') {
+            // User dismissed the share sheet
+            return;
+          }
+          console.warn('Web Share failed, falling back to download:', err);
+        }
+      }
+
+      // 2. Fallback to anchor download tag
+      try {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }, 2000);
+        showToast(`音声ファイル (${fileName}) を保存しました`, 'success');
+      } catch (err) {
+        console.error('File download failed:', err);
+        showToast('ファイルの保存に失敗しました: ' + err.message, 'error');
+      }
+    }
+
     // Canvas Visualizer
     function setupVisualizer(stream) {
       try {
@@ -674,12 +872,16 @@
           }
         };
 
-        mediaRecorder.onstop = () => {
+        mediaRecorder.onstop = async () => {
+          const duration = recordStartTime ? (Date.now() - recordStartTime) : 0;
           audioBlob = new Blob(audioChunks, { type: mimeType || 'audio/mp4' });
           if (audioUrl) URL.revokeObjectURL(audioUrl);
           audioUrl = URL.createObjectURL(audioBlob);
           document.getElementById('audioPreview').src = audioUrl;
           document.getElementById('audioPlaybackBox').classList.remove('hidden');
+
+          // Immediately save to IndexedDB as zero-loss safety net
+          await saveAudioDraft(audioBlob, duration);
 
           // Stop all audio tracks
           stream.getTracks().forEach(t => t.stop());
@@ -751,6 +953,7 @@
       document.getElementById('timerDisplay').innerText = '00:00';
       document.getElementById('audioPlaybackBox').classList.add('hidden');
       document.getElementById('transcriptionCard').classList.add('hidden');
+      document.getElementById('transcriptionErrorCard').classList.add('hidden');
       document.getElementById('loadingCard').classList.add('hidden');
       document.getElementById('successCard').classList.add('hidden');
       document.getElementById('transcriptionInput').value = '';
@@ -820,6 +1023,7 @@
       }
 
       setUIState('processing');
+      document.getElementById('transcriptionErrorCard').classList.add('hidden');
       document.getElementById('loadingCard').classList.remove('hidden');
       document.getElementById('loadingMessage').innerText = 'Gemini Flash で音声を文字起こし中...';
 
@@ -886,8 +1090,10 @@
       } catch (err) {
         console.error('Transcription failed:', err);
         document.getElementById('loadingCard').classList.add('hidden');
-        document.getElementById('transcriptionCard').classList.remove('hidden');
-        showToast('文字起こしに失敗しました: ' + err.message, 'error');
+        document.getElementById('transcriptionErrorCard').classList.remove('hidden');
+        document.getElementById('transcriptionErrorMsg').innerText = err.message || 'Gemini API による文字起こしに失敗しました。録音データは安全に保持されています。';
+        lucide.createIcons();
+        showToast('文字起こしに失敗しました（録音データは安全に保持されています）', 'error');
       } finally {
         setUIState('idle');
       }
@@ -983,6 +1189,10 @@
         document.getElementById('loadingCard').classList.add('hidden');
         document.getElementById('transcriptionCard').classList.add('hidden');
         document.getElementById('successCard').classList.remove('hidden');
+
+        // Clear backup draft from IndexedDB since it has been safely committed
+        await clearAudioDraft();
+        document.getElementById('draftRecoveryBanner').classList.add('hidden');
 
         showToast('キューに送信完了！agyが自律生成します', 'success');
 
@@ -1134,10 +1344,52 @@
       resultBox.innerHTML = details.join('<br>');
     }
 
+    // Draft Status & Recovery Logic
+    async function checkDraftStatus() {
+      const draft = await getAudioDraft();
+      const banner = document.getElementById('draftRecoveryBanner');
+      const info = document.getElementById('draftRecoveryInfo');
+      if (draft && draft.blob) {
+        const date = new Date(draft.timestamp);
+        const timeStr = date.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+        const sec = Math.round((draft.durationMs || 0) / 1000);
+        const durStr = sec > 0 ? ` (${sec}秒)` : '';
+        info.innerText = `${timeStr} 録音${durStr} の安全バックアップあり`;
+        banner.classList.remove('hidden');
+        banner.classList.add('flex');
+        lucide.createIcons();
+      } else {
+        banner.classList.add('hidden');
+        banner.classList.remove('flex');
+      }
+    }
+
+    async function restoreDraft() {
+      const draft = await getAudioDraft();
+      if (!draft || !draft.blob) {
+        showToast('復元可能な録音データが見つかりませんでした', 'error');
+        document.getElementById('draftRecoveryBanner').classList.add('hidden');
+        return;
+      }
+      audioBlob = draft.blob;
+      if (audioUrl) URL.revokeObjectURL(audioUrl);
+      audioUrl = URL.createObjectURL(audioBlob);
+      document.getElementById('audioPreview').src = audioUrl;
+      document.getElementById('audioPlaybackBox').classList.remove('hidden');
+
+      // Reveal rescue card so user can immediately save to iPhone or transcribe
+      document.getElementById('transcriptionErrorCard').classList.remove('hidden');
+      document.getElementById('transcriptionErrorMsg').innerText = '前回保存された録音データを復元しました。音声をiPhone本体に保存するか、文字起こしを再実行できます。';
+      document.getElementById('draftRecoveryBanner').classList.add('hidden');
+      lucide.createIcons();
+      showToast('録音データを復元しました！', 'success');
+    }
+
     // Event Listeners
     window.addEventListener('DOMContentLoaded', () => {
       lucide.createIcons();
       updateDisplayWithConfig();
+      checkDraftStatus();
 
       // Register Service Worker for PWA
       if ('serviceWorker' in navigator) {
@@ -1159,8 +1411,45 @@
       document.getElementById('cancelRecordBtn').addEventListener('click', cancelRecording);
       document.getElementById('pauseRecordBtn').addEventListener('click', togglePauseRecording);
 
+      // Audio Preview & Rescue Buttons (Save to iPhone & Retry)
+      document.getElementById('saveAudioFileBtn').addEventListener('click', () => {
+        saveAudioToDevice(audioBlob);
+      });
+      document.getElementById('retryTranscribeBtn').addEventListener('click', () => {
+        if (audioBlob) handleTranscription(audioBlob);
+      });
+
+      // Error Rescue Card Actions
+      document.getElementById('errorSaveAudioBtn').addEventListener('click', () => {
+        saveAudioToDevice(audioBlob);
+      });
+      document.getElementById('errorRetryTranscribeBtn').addEventListener('click', () => {
+        if (audioBlob) handleTranscription(audioBlob);
+      });
+      document.getElementById('errorManualInputBtn').addEventListener('click', () => {
+        document.getElementById('transcriptionErrorCard').classList.add('hidden');
+        document.getElementById('transcriptionCard').classList.remove('hidden');
+        document.getElementById('transcriptionInput').focus();
+      });
+
+      // Draft Banner Actions
+      document.getElementById('bannerRestoreDraft').addEventListener('click', restoreDraft);
+      document.getElementById('bannerDiscardDraft').addEventListener('click', async () => {
+        if (confirm('未送信の録音データを破棄しますか？')) {
+          await clearAudioDraft();
+          document.getElementById('draftRecoveryBanner').classList.add('hidden');
+          showToast('下書き録音を破棄しました');
+        }
+      });
+
       // Reset / Next Record
-      document.getElementById('discardBtn').addEventListener('click', resetRecordingUI);
+      document.getElementById('discardBtn').addEventListener('click', async () => {
+        if (confirm('現在の録音と入力を破棄しますか？')) {
+          await clearAudioDraft();
+          resetRecordingUI();
+          showToast('録音を破棄しました');
+        }
+      });
       document.getElementById('nextRecordBtn').addEventListener('click', resetRecordingUI);
 
       // Commit
