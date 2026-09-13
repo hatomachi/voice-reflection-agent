@@ -126,13 +126,15 @@ voice-reflection-agent/
 
 ## 5. 🎯 実装ロードマップ
 
-1. **Step 1: プロンプトテンプレートの確立**:
-   - `00_役割定義.md` を踏まえ、過去ログと同等以上の切れ味を出すプロンプト定義。
-2. **Step 2: キュー監視＆agy実行スクリプトの作成**:
-   - `git fetch` ➡ キュー検知 ➡ `agy` 呼び出し ➡ Markdown生成 ➡ `git push` の疎通確認。
-3. **Step 3: macOS launchd への常駐登録**:
-   - MacBook稼働中に自動でバックグラウンド実行されるようにする。
-4. **Step 4: iOSショートカットの作成**:
-   - iPhoneボイスメモから文字起こし ➡ GitHub API経由で `00_Inbox/queue/` にPOSTするショートカットのレシピ作成。
-5. **Step 5: 過去ログ（8/17〜9/11）のVault格納**:
-   - NotebookLMに溜まっていた過去ログを日別ノート化して `personal-vault` へ格納。
+1. **[x] Step 1: プロンプトテンプレートの確立**:
+   - `00_役割定義.md` を踏まえ、NotebookLM以上の切れ味（デトックス、承認、逃避の指摘、たった1つの石）を出すプロンプト策定完了（`templates/reflection_prompt.md`）。
+2. **[x] Step 2: キュー監視＆agy実行スクリプトの作成**:
+   - `git fetch` ➡ キュー検知 ➡ `agy` 呼び出し ➡ Markdown生成 ➡ `git push` の自律パイプライン実装完了（`src/`）。
+   - 実機End-to-Endテストにより、`2026-09-13.md` の生成・追記・プッシュ成功を確認済み。
+3. **[x] Step 3: 過去ログ（8/17〜9/11）のVault格納**:
+   - 8/17〜9/11（全23日分）の過去ログを日別ノート群として `personal-vault/00_Inbox/Reflections/` に一括移行完了。
+4. **[x] Step 4: macOS launchd 常駐設定ファイルの整備**:
+   - `config/com.user.voice-reflection.plist` および `bin/reflection-daemon.sh` を整備完了。
+5. **[ ] Step 5: iPhone側キュー送信クライアントの構築（次回セッション）**:
+   - **Cloudflare Pages PWA（推奨）**: 単一HTML（Wake Lock画面スリープ防止、MediaRecorder録音、Gemini Flash文字起こし、GitHub Direct Commit）の実装。
+   - **iOSショートカット（代替）**: ボイスメモ共有からGitHub APIへキュー投入するレシピ作成。
