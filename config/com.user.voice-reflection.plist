@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.user.voice-reflection</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/s-ikari/work/voice-reflection-agent/bin/reflection-daemon.sh</string>
+    </array>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/s-ikari/work/voice-reflection-agent/daemon.stdout.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/s-ikari/work/voice-reflection-agent/daemon.stderr.log</string>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/s-ikari/work/voice-reflection-agent</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/Users/s-ikari/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+</dict>
+</plist>
