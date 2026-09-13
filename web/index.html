@@ -336,8 +336,10 @@
           <div>
             <label class="block text-[11px] text-zinc-400 mb-1">Model</label>
             <select id="selectGeminiModel" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-zinc-200 focus:outline-none focus:border-emerald-500 text-[11px]">
-              <option value="gemini-2.0-flash">gemini-2.0-flash (推奨・爆速・最新)</option>
-              <option value="gemini-1.5-flash">gemini-1.5-flash (標準)</option>
+              <option value="gemini-2.5-flash">gemini-2.5-flash (推奨・安定・爆速)</option>
+              <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite (超高速・最安)</option>
+              <option value="gemini-3.5-flash">gemini-3.5-flash (最新・高知能)</option>
+              <option value="gemini-3.5-transcribe">gemini-3.5-transcribe (文字起こし専用)</option>
             </select>
           </div>
         </div>
@@ -411,13 +413,19 @@
       githubRepo: 'personal-vault',
       githubBranch: 'main',
       geminiApiKey: '',
-      geminiModel: 'gemini-2.0-flash'
+      geminiModel: 'gemini-2.5-flash'
     };
 
     function getConfig() {
       try {
         const raw = localStorage.getItem(CONFIG_KEY);
-        return raw ? { ...defaultConfig, ...JSON.parse(raw) } : defaultConfig;
+        const cfg = raw ? { ...defaultConfig, ...JSON.parse(raw) } : defaultConfig;
+        // Auto-migrate legacy unavailable models
+        if (cfg.geminiModel === 'gemini-2.0-flash' || cfg.geminiModel === 'gemini-1.5-flash') {
+          cfg.geminiModel = 'gemini-2.5-flash';
+          localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg));
+        }
+        return cfg;
       } catch (e) {
         return defaultConfig;
       }
