@@ -17,6 +17,8 @@
   <!-- Tailwind CSS & Lucide Icons -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- LAME MP3 Encoder (Browser-native MP3 encoding) -->
+  <script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js"></script>
 
   <script>
     tailwind.config = {
@@ -84,7 +86,7 @@
     <div class="flex items-center space-x-2.5">
       <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-500 to-cyan-500 p-0.5 flex items-center justify-center shadow-lg shadow-emerald-950/50">
         <div class="w-full h-full bg-zinc-950 rounded-[10px] flex items-center justify-center">
-          <i data-lucide="mic" class="w-4 h-4 text-emerald-400"></i>
+          <i id="appHeaderIcon" data-lucide="mic" class="w-4 h-4 text-emerald-400"></i>
         </div>
       </div>
       <div>
@@ -93,6 +95,18 @@
           <span class="text-[10px] font-normal px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">PWA</span>
         </h1>
       </div>
+    </div>
+
+    <!-- Mode Selector Tabs (Reflection vs PC Meeting) -->
+    <div class="flex items-center p-0.5 rounded-xl bg-zinc-900/90 border border-zinc-800/90 text-xs">
+      <button id="tabBtnReflection" type="button" class="px-2.5 py-1 rounded-lg font-medium text-[11px] bg-zinc-800 text-zinc-100 shadow-sm transition flex items-center gap-1.5">
+        <i data-lucide="moon" class="w-3.5 h-3.5 text-emerald-400"></i>
+        <span>夜のリフレクション</span>
+      </button>
+      <button id="tabBtnMeeting" type="button" class="px-2.5 py-1 rounded-lg font-medium text-[11px] text-zinc-400 hover:text-zinc-200 transition flex items-center gap-1.5">
+        <i data-lucide="monitor" class="w-3.5 h-3.5 text-cyan-400"></i>
+        <span>💻 会議・画面記録</span>
+      </button>
     </div>
 
     <!-- Right Header Actions -->
@@ -147,10 +161,13 @@
   </div>
 
   <!-- Main Container -->
-  <main class="flex-1 max-w-md w-full mx-auto px-4 py-4 flex flex-col justify-between">
+  <main class="flex-1 max-w-2xl w-full mx-auto px-4 py-4 flex flex-col justify-between">
     
-    <!-- Top Information / Status Section -->
-    <div class="space-y-4">
+    <!-- ================= VIEW: REFLECTION (NIGHT VOICE MEMO) ================= -->
+    <div id="viewReflection" class="flex-1 flex flex-col justify-between">
+      
+      <!-- Top Information / Status Section -->
+      <div class="space-y-4">
       <!-- Target Vault Badge -->
       <div class="flex items-center justify-between text-xs px-3 py-2 rounded-xl bg-zinc-900/90 border border-zinc-800 text-zinc-400">
         <div class="flex items-center space-x-2 truncate">
@@ -331,6 +348,204 @@
         </button>
       </div>
     </div>
+    </div> <!-- Close viewReflection -->
+
+    <!-- ================= VIEW: MEETING & SCREEN RECORDER (PC) ================= -->
+    <div id="viewMeeting" class="hidden flex-1 flex flex-col space-y-4">
+      
+      <!-- Target Vault Badge -->
+      <div class="flex items-center justify-between text-xs px-3.5 py-2 rounded-xl bg-zinc-900/90 border border-zinc-800 text-zinc-400">
+        <div class="flex items-center space-x-2 truncate">
+          <i data-lucide="folder-git-2" class="w-3.5 h-3.5 text-cyan-400 shrink-0"></i>
+          <span class="truncate">保存先: <span id="meetingTargetRepoDisplay" class="text-zinc-200 font-mono">personal-vault</span> (<span id="meetingTargetBranchDisplay">main</span>)</span>
+        </div>
+        <span class="text-[10px] px-2 py-0.5 rounded bg-zinc-800 text-cyan-300 font-mono">00_Inbox/Meetings/</span>
+      </div>
+
+      <!-- Screen Capture & Preview Section -->
+      <div class="relative bg-zinc-900/80 rounded-3xl p-4 sm:p-5 border border-zinc-800/80 backdrop-blur shadow-2xl flex flex-col items-center">
+        <!-- Video Stream Container -->
+        <div class="relative w-full aspect-video rounded-2xl bg-zinc-950 border border-zinc-800/80 overflow-hidden flex items-center justify-center group shadow-inner">
+          <video id="meetingScreenVideo" autoplay playsinline muted class="w-full h-full object-contain hidden"></video>
+
+          <!-- Placeholder when no screen selected -->
+          <div id="screenSelectPrompt" class="flex flex-col items-center justify-center p-6 text-center space-y-3">
+            <div class="w-16 h-16 rounded-2xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 flex items-center justify-center shadow-lg">
+              <i data-lucide="monitor-up" class="w-8 h-8"></i>
+            </div>
+            <div>
+              <p class="text-sm font-semibold text-zinc-200">対象の画面・モニタを選択</p>
+              <p class="text-xs text-zinc-400 mt-1 max-w-sm">
+                複数モニタや会議ウィンドウを選択できます。<br>
+                スライドの切り替えなどの変化を自動検知してスクショを撮影します。
+              </p>
+            </div>
+            <button id="btnSelectScreen" type="button" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-zinc-950 text-xs font-semibold shadow-lg shadow-cyan-950/40 active:scale-95 transition flex items-center gap-2">
+              <i data-lucide="screen-share" class="w-4 h-4"></i>
+              <span>キャプチャ画面を選択する</span>
+            </button>
+          </div>
+
+          <!-- Video Floating Overlay Controls -->
+          <div id="videoFloatingOverlay" class="hidden absolute top-3 inset-x-3 flex items-center justify-between pointer-events-none">
+            <div class="flex items-center gap-2 bg-zinc-950/85 backdrop-blur-md px-2.5 py-1 rounded-lg border border-zinc-800 text-[11px] text-zinc-300">
+              <span id="screenLiveDot" class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span id="screenInfoLabel">画面共有中</span>
+            </div>
+            <div class="pointer-events-auto flex items-center gap-1.5">
+              <button id="btnChangeScreen" type="button" class="px-2.5 py-1 rounded-lg bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-700/80 text-[11px] text-zinc-300 transition flex items-center gap-1">
+                <i data-lucide="refresh-cw" class="w-3 h-3"></i> 画面切替
+              </button>
+            </div>
+          </div>
+
+          <!-- Screenshot Flash Animation Overlay -->
+          <div id="screenshotFlash" class="absolute inset-0 bg-white opacity-0 pointer-events-none transition-opacity duration-200 z-20"></div>
+        </div>
+
+        <!-- Hidden Canvases for Analysis and Full Capture -->
+        <canvas id="diffCanvas" width="128" height="72" class="hidden"></canvas>
+        <canvas id="fullCaptureCanvas" class="hidden"></canvas>
+
+        <!-- Meeting Recording & Timer Status Bar -->
+        <div class="w-full mt-4 flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-zinc-800/80">
+          <div class="flex items-center space-x-3">
+            <!-- Recording Indicator Pulse -->
+            <div id="meetingRecIndicator" class="hidden flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-950/80 border border-red-800/80 text-red-400 text-xs font-mono">
+              <span class="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
+              <span>REC</span>
+            </div>
+            <!-- Meeting Timer -->
+            <div id="meetingTimerDisplay" class="text-2xl sm:text-3xl font-light font-mono text-zinc-200 tracking-wider">
+              00:00:00
+            </div>
+          </div>
+
+          <!-- Audio Wave / Volume Bars -->
+          <div class="flex items-center gap-1 h-5 px-3 py-1 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
+            <i data-lucide="mic" class="w-3.5 h-3.5 text-zinc-500 mr-1"></i>
+            <span id="meetingVol1" class="w-1 bg-emerald-500 rounded-full h-1 transition-all duration-75"></span>
+            <span id="meetingVol2" class="w-1 bg-emerald-500 rounded-full h-1 transition-all duration-75"></span>
+            <span id="meetingVol3" class="w-1 bg-emerald-500 rounded-full h-1 transition-all duration-75"></span>
+            <span id="meetingVol4" class="w-1 bg-emerald-500 rounded-full h-1 transition-all duration-75"></span>
+            <span id="meetingVol5" class="w-1 bg-emerald-500 rounded-full h-1 transition-all duration-75"></span>
+            <span id="meetingAudioStatus" class="text-[10px] text-zinc-500 ml-1.5 font-mono">マイク待機</span>
+          </div>
+        </div>
+
+        <!-- Action Control Buttons -->
+        <div class="w-full mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <!-- Start / Stop Meeting Record Button -->
+          <button id="btnToggleMeeting" type="button" class="py-3.5 px-5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-zinc-950 font-semibold text-sm shadow-xl shadow-emerald-950/50 active:scale-98 transition flex items-center justify-center gap-2">
+            <i id="meetingBtnIcon" data-lucide="play" class="w-5 h-5 fill-current"></i>
+            <span id="meetingBtnLabel">会議開始（録音 ＆ 自動スクショ）</span>
+          </button>
+
+          <!-- Manual Screenshot Button -->
+          <button id="btnManualCapture" type="button" disabled class="py-3.5 px-5 rounded-2xl bg-zinc-850 hover:bg-zinc-800 disabled:opacity-40 disabled:pointer-events-none text-zinc-100 font-semibold text-sm border border-zinc-700/80 active:scale-98 transition flex items-center justify-center gap-2 shadow-lg">
+            <i data-lucide="camera" class="w-5 h-5 text-cyan-400"></i>
+            <span>📸 今すぐスクショ（手動）</span>
+          </button>
+        </div>
+
+        <!-- Auto Detection Settings Accordion / Bar -->
+        <div class="w-full mt-3 p-3 rounded-xl bg-zinc-950/60 border border-zinc-800/80 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div class="flex items-center gap-2">
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="checkAutoCapture" checked class="sr-only peer">
+              <div class="w-8 h-4 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500"></div>
+            </label>
+            <span class="text-zinc-300 font-medium">画面変化の自動検知</span>
+          </div>
+
+          <div class="flex items-center gap-3 text-zinc-400 text-[11px]">
+            <span class="flex items-center gap-1">
+              <span>感度:</span>
+              <select id="selectSensitivity" class="bg-zinc-800 border border-zinc-700 text-zinc-200 rounded px-1.5 py-0.5 text-[11px] focus:outline-none">
+                <option value="low">低（大きな変化のみ）</option>
+                <option value="medium" selected>標準（スライド送り等）</option>
+                <option value="high">高（わずかな変化も）</option>
+              </select>
+            </span>
+            <span class="text-zinc-500">| 間隔: 最低5秒</span>
+            <span class="px-1.5 py-0.5 rounded bg-zinc-800 text-amber-300 font-mono text-[10px]">JPEG 0.85 & MP3</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Processing / Encoding Indicator Card -->
+      <div id="meetingProcessingCard" class="hidden p-5 rounded-2xl bg-zinc-900 border border-zinc-800 text-center space-y-3 shadow-xl">
+        <div class="inline-block animate-spin rounded-full h-8 w-8 border-2 border-cyan-500 border-t-transparent"></div>
+        <p id="meetingProcessingMsg" class="text-sm font-medium text-zinc-200">音声データをMP3に変換中...</p>
+        <p class="text-[11px] text-zinc-500">ブラウザ内で軽量・高音質なMP3を高速生成し、GitHubにコミットしています</p>
+      </div>
+
+      <!-- Meeting Finished & Success Card -->
+      <div id="meetingSuccessCard" class="hidden p-5 rounded-2xl bg-gradient-to-br from-cyan-950/60 via-zinc-900 to-zinc-900 border border-cyan-800/60 shadow-2xl space-y-4">
+        <div class="flex items-start justify-between">
+          <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center">
+              <i data-lucide="check-circle-2" class="w-6 h-6"></i>
+            </div>
+            <div>
+              <h3 class="text-sm font-semibold text-zinc-100">会議記録の保存が完了しました！</h3>
+              <p id="meetingSavedFolderLabel" class="text-xs font-mono text-cyan-300/90 mt-0.5">00_Inbox/Meetings/YYYY-MM-DD_HHmmss/</p>
+            </div>
+          </div>
+          <button id="btnDismissMeetingSuccess" class="text-zinc-400 hover:text-zinc-200 p-1">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <div id="meetingSummaryStats" class="grid grid-cols-3 gap-2 text-center p-3 rounded-xl bg-zinc-950/80 border border-zinc-800 text-xs">
+          <div>
+            <div class="text-[10px] text-zinc-500">録音時間</div>
+            <div id="statDuration" class="font-mono text-zinc-200 font-semibold mt-0.5">00:00:00</div>
+          </div>
+          <div>
+            <div class="text-[10px] text-zinc-500">撮影スクショ</div>
+            <div id="statScreenshots" class="font-mono text-cyan-300 font-semibold mt-0.5">0 枚 (JPEG)</div>
+          </div>
+          <div>
+            <div class="text-[10px] text-zinc-500">音声形式</div>
+            <div class="font-mono text-amber-300 font-semibold mt-0.5">MP3</div>
+          </div>
+        </div>
+
+        <!-- Download & Obsidian Actions -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+          <button id="btnDownloadMp3" type="button" class="py-2.5 px-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-zinc-950 text-xs font-semibold shadow-md active:scale-98 transition flex items-center justify-center gap-1.5">
+            <i data-lucide="download" class="w-4 h-4"></i>
+            <span>📥 MP3音声をPCに保存（NotebookLM用）</span>
+          </button>
+          <a id="linkGitHubFolder" href="#" target="_blank" rel="noopener noreferrer" class="py-2.5 px-3 rounded-xl bg-zinc-800 hover:bg-zinc-750 text-zinc-200 text-xs font-medium border border-zinc-700/80 transition flex items-center justify-center gap-1.5">
+            <i data-lucide="github" class="w-4 h-4 text-zinc-400"></i>
+            <span>GitHubで会議フォルダを開く</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Screenshot Timeline & Live Gallery -->
+      <div class="bg-zinc-900/60 rounded-2xl p-4 border border-zinc-800/80 backdrop-blur space-y-3">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <i data-lucide="images" class="w-4 h-4 text-cyan-400"></i>
+            <h4 class="text-xs font-semibold text-zinc-200">撮影されたスクショ一覧 (JPEG)</h4>
+            <span id="badgeScreenshotCount" class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400">0 枚</span>
+          </div>
+          <span class="text-[10px] text-zinc-500">※ GitHubへ即時コミットされます</span>
+        </div>
+
+        <!-- Gallery Grid / Strip -->
+        <div id="galleryEmptyState" class="py-8 text-center text-zinc-500 text-xs">
+          まだスクショはありません。画面に変化があると自動撮影されます。
+        </div>
+        <div id="galleryContainer" class="hidden grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-h-80 overflow-y-auto pr-1">
+          <!-- Dynamically populated screenshot cards -->
+        </div>
+      </div>
+
+    </div>
   </main>
 
   <!-- ================= SETTINGS MODAL ================= -->
@@ -476,6 +691,25 @@
     let visualizerAnimId = null;
     let isPaused = false;
     let currentUsage = null;
+
+    // Meeting & Screen Recorder State Variables
+    let currentAppMode = 'reflection'; // 'reflection' or 'meeting'
+    let meetingScreenStream = null;
+    let meetingMediaRecorder = null;
+    let meetingAudioChunks = [];
+    let meetingAudioContext = null;
+    let meetingAnalyserNode = null;
+    let meetingMeterAnimId = null;
+    let meetingTimerId = null;
+    let meetingStartTime = null;
+    let meetingDiffIntervalId = null;
+    let meetingScreenshots = [];
+    let currentMeetingFolder = null;
+    let meetingLastMp3Blob = null;
+    let isMeetingRecording = false;
+    let prevFrameData = null;
+    let lastCaptureTime = 0;
+    const MIN_CAPTURE_INTERVAL_MS = 5000; // スクショ連打防止（最低5秒間隔）
 
     // Config & Storage Keys
     const CONFIG_KEY = 'voice_reflection_config_v1';
@@ -1262,6 +1496,10 @@
       const cfg = getConfig();
       document.getElementById('targetRepoDisplay').innerText = cfg.githubRepo;
       document.getElementById('targetBranchDisplay').innerText = cfg.githubBranch;
+      const meetingRepoEl = document.getElementById('meetingTargetRepoDisplay');
+      const meetingBranchEl = document.getElementById('meetingTargetBranchDisplay');
+      if (meetingRepoEl) meetingRepoEl.innerText = cfg.githubRepo;
+      if (meetingBranchEl) meetingBranchEl.innerText = cfg.githubBranch;
 
       const isMissing = !cfg.githubToken || !cfg.geminiApiKey;
       const banner = document.getElementById('setupBanner');
@@ -1385,6 +1623,672 @@
       showToast('録音データを復元しました！', 'success');
     }
 
+    // =========================================================================
+    // PC Meeting & Screen Capture Manager (JPEG Screenshots & MP3 Encoding)
+    // =========================================================================
+
+    function blobToBase64(blob) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const dataUrl = reader.result;
+          const base64 = dataUrl.split(',')[1];
+          resolve(base64);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    }
+
+    async function commitBinaryFileToGitHub(path, base64Content, commitMessage) {
+      const cfg = getConfig();
+      if (!cfg.githubToken) throw new Error('GitHub PATが設定されていません');
+      const commitUrl = `https://api.github.com/repos/${cfg.githubOwner}/${cfg.githubRepo}/contents/${path}`;
+      const response = await fetch(commitUrl, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${cfg.githubToken}`,
+          'Accept': 'application/vnd.github.v3+json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          message: commitMessage,
+          content: base64Content,
+          branch: cfg.githubBranch || 'main'
+        })
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.message || `GitHub API error (Status: ${response.status})`);
+      }
+      return await response.json();
+    }
+
+    function encodeAudioBufferToMp3(audioBuffer, kbps = 128) {
+      if (typeof lamejs === 'undefined') {
+        throw new Error('LAME MP3エンコーダライブラリが読み込まれていません');
+      }
+      const sampleRate = audioBuffer.sampleRate;
+      const length = audioBuffer.length;
+      const numChannels = audioBuffer.numberOfChannels;
+
+      // 会議・会話音声に最適化するためモノラル化
+      const monoSamples = new Float32Array(length);
+      if (numChannels === 1) {
+        monoSamples.set(audioBuffer.getChannelData(0));
+      } else {
+        const left = audioBuffer.getChannelData(0);
+        const right = audioBuffer.getChannelData(1);
+        for (let i = 0; i < length; i++) {
+          monoSamples[i] = (left[i] + right[i]) * 0.5;
+        }
+      }
+
+      // Float32 (-1.0 to 1.0) を Int16 (-32768 to 32767) に変換
+      const int16Samples = new Int16Array(length);
+      for (let i = 0; i < length; i++) {
+        const s = Math.max(-1, Math.min(1, monoSamples[i]));
+        int16Samples[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+      }
+
+      const mp3Encoder = new lamejs.Mp3Encoder(1, sampleRate, kbps);
+      const mp3Chunks = [];
+      const sampleBlockSize = 1152;
+
+      for (let i = 0; i < int16Samples.length; i += sampleBlockSize) {
+        const chunk = int16Samples.subarray(i, i + sampleBlockSize);
+        const mp3buf = mp3Encoder.encodeBuffer(chunk);
+        if (mp3buf && mp3buf.length > 0) {
+          mp3Chunks.push(mp3buf);
+        }
+      }
+      const finalBuf = mp3Encoder.flush();
+      if (finalBuf && finalBuf.length > 0) {
+        mp3Chunks.push(finalBuf);
+      }
+
+      return new Blob(mp3Chunks, { type: 'audio/mp3' });
+    }
+
+    function switchAppMode(mode) {
+      currentAppMode = mode;
+      localStorage.setItem('voice_reflection_app_mode', mode);
+
+      const viewReflection = document.getElementById('viewReflection');
+      const viewMeeting = document.getElementById('viewMeeting');
+      const tabReflection = document.getElementById('tabBtnReflection');
+      const tabMeeting = document.getElementById('tabBtnMeeting');
+      const appHeaderIcon = document.getElementById('appHeaderIcon');
+
+      if (mode === 'meeting') {
+        viewReflection.classList.add('hidden');
+        viewMeeting.classList.remove('hidden');
+
+        tabReflection.className = 'px-2.5 py-1 rounded-lg font-medium text-[11px] text-zinc-400 hover:text-zinc-200 transition flex items-center gap-1.5';
+        tabMeeting.className = 'px-2.5 py-1 rounded-lg font-medium text-[11px] bg-zinc-800 text-cyan-300 shadow-sm transition flex items-center gap-1.5';
+
+        if (appHeaderIcon) {
+          appHeaderIcon.setAttribute('data-lucide', 'monitor');
+          appHeaderIcon.className = 'w-4 h-4 text-cyan-400';
+        }
+      } else {
+        viewMeeting.classList.add('hidden');
+        viewReflection.classList.remove('hidden');
+
+        tabReflection.className = 'px-2.5 py-1 rounded-lg font-medium text-[11px] bg-zinc-800 text-zinc-100 shadow-sm transition flex items-center gap-1.5';
+        tabMeeting.className = 'px-2.5 py-1 rounded-lg font-medium text-[11px] text-zinc-400 hover:text-zinc-200 transition flex items-center gap-1.5';
+
+        if (appHeaderIcon) {
+          appHeaderIcon.setAttribute('data-lucide', 'mic');
+          appHeaderIcon.className = 'w-4 h-4 text-emerald-400';
+        }
+      }
+      lucide.createIcons();
+    }
+
+    async function selectScreenCapture() {
+      try {
+        if (meetingScreenStream) {
+          meetingScreenStream.getTracks().forEach(t => t.stop());
+        }
+
+        const stream = await navigator.mediaDevices.getDisplayMedia({
+          video: {
+            displaySurface: 'monitor',
+            frameRate: { ideal: 15, max: 30 }
+          },
+          audio: true // システム音声を共有するオプションを提示
+        });
+
+        meetingScreenStream = stream;
+        const video = document.getElementById('meetingScreenVideo');
+        video.srcObject = stream;
+        video.classList.remove('hidden');
+
+        document.getElementById('screenSelectPrompt').classList.add('hidden');
+        document.getElementById('videoFloatingOverlay').classList.remove('hidden');
+        document.getElementById('btnManualCapture').disabled = false;
+
+        const videoTrack = stream.getVideoTracks()[0];
+        const trackSettings = videoTrack.getSettings ? videoTrack.getSettings() : {};
+        const label = videoTrack.label || '画面共有中';
+        const resText = trackSettings.width && trackSettings.height ? ` (${trackSettings.width}x${trackSettings.height})` : '';
+        document.getElementById('screenInfoLabel').innerText = `${label}${resText}`;
+
+        videoTrack.onended = () => {
+          onScreenCaptureEnded();
+        };
+
+        showToast('画面共有を開始しました', 'success');
+        return true;
+      } catch (err) {
+        if (err.name !== 'NotAllowedError') {
+          console.error('Screen capture error:', err);
+          showToast(`画面共有エラー: ${err.message}`, 'error');
+        }
+        return false;
+      }
+    }
+
+    function onScreenCaptureEnded() {
+      meetingScreenStream = null;
+      const video = document.getElementById('meetingScreenVideo');
+      video.srcObject = null;
+      video.classList.add('hidden');
+
+      document.getElementById('screenSelectPrompt').classList.remove('hidden');
+      document.getElementById('videoFloatingOverlay').classList.add('hidden');
+      if (!isMeetingRecording) {
+        document.getElementById('btnManualCapture').disabled = true;
+      }
+      showToast('画面共有が停止されました', 'info');
+    }
+
+    function updateMeetingTimer() {
+      if (!meetingStartTime) return;
+      const elapsedMs = Date.now() - meetingStartTime;
+      const totalSec = Math.floor(elapsedMs / 1000);
+      const hours = Math.floor(totalSec / 3600);
+      const minutes = Math.floor((totalSec % 3600) / 60);
+      const seconds = totalSec % 60;
+
+      const timerStr = [
+        String(hours).padStart(2, '0'),
+        String(minutes).padStart(2, '0'),
+        String(seconds).padStart(2, '0')
+      ].join(':');
+
+      document.getElementById('meetingTimerDisplay').innerText = timerStr;
+    }
+
+    function formatSecondsToTimer(totalSec) {
+      const hours = Math.floor(totalSec / 3600);
+      const minutes = Math.floor((totalSec % 3600) / 60);
+      const seconds = totalSec % 60;
+      if (hours > 0) {
+        return `${hours}時間${minutes}分${seconds}秒`;
+      }
+      return `${minutes}分${seconds}秒`;
+    }
+
+    function startMeetingAudioMeter(analyser) {
+      meetingAnalyserNode = analyser;
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      const bars = [
+        document.getElementById('meetingVol1'),
+        document.getElementById('meetingVol2'),
+        document.getElementById('meetingVol3'),
+        document.getElementById('meetingVol4'),
+        document.getElementById('meetingVol5')
+      ];
+      const statusLabel = document.getElementById('meetingAudioStatus');
+
+      function updateMeter() {
+        if (!isMeetingRecording) {
+          bars.forEach(b => { if (b) b.style.height = '4px'; });
+          if (statusLabel) statusLabel.innerText = 'マイク待機';
+          return;
+        }
+
+        meetingAnalyserNode.getByteFrequencyData(dataArray);
+        let sum = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+          sum += dataArray[i];
+        }
+        const avg = sum / dataArray.length;
+        const norm = Math.min(1, avg / 80);
+
+        bars.forEach((b, idx) => {
+          if (b) {
+            const h = Math.max(4, Math.min(20, Math.round(norm * 20 * (0.8 + (idx % 3) * 0.2))));
+            b.style.height = `${h}px`;
+          }
+        });
+
+        if (statusLabel) {
+          statusLabel.innerText = norm > 0.1 ? '録音中 (マイク検知)' : '録音中 (無音)';
+          statusLabel.className = norm > 0.1 ? 'text-[10px] text-emerald-400 ml-1.5 font-mono' : 'text-[10px] text-zinc-500 ml-1.5 font-mono';
+        }
+
+        meetingMeterAnimId = requestAnimationFrame(updateMeter);
+      }
+
+      updateMeter();
+    }
+
+    function checkScreenDifference() {
+      const video = document.getElementById('meetingScreenVideo');
+      if (!video || video.readyState < 2 || !isMeetingRecording) return;
+      if (!document.getElementById('checkAutoCapture').checked) return;
+
+      const diffCanvas = document.getElementById('diffCanvas');
+      const ctx = diffCanvas.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(video, 0, 0, diffCanvas.width, diffCanvas.height);
+      const currentFrame = ctx.getImageData(0, 0, diffCanvas.width, diffCanvas.height).data;
+
+      if (!prevFrameData) {
+        prevFrameData = currentFrame;
+        return;
+      }
+
+      let changedPixels = 0;
+      const totalPixels = diffCanvas.width * diffCanvas.height;
+      const thresholdPerPixel = 32;
+
+      for (let i = 0; i < currentFrame.length; i += 4) {
+        const rDiff = Math.abs(currentFrame[i] - prevFrameData[i]);
+        const gDiff = Math.abs(currentFrame[i + 1] - prevFrameData[i + 1]);
+        const bDiff = Math.abs(currentFrame[i + 2] - prevFrameData[i + 2]);
+        if ((rDiff + gDiff + bDiff) > thresholdPerPixel) {
+          changedPixels++;
+        }
+      }
+
+      const changeRatio = changedPixels / totalPixels;
+      prevFrameData = currentFrame;
+
+      const sensitivity = document.getElementById('selectSensitivity').value;
+      let targetRatio = 0.035; // medium: 3.5%
+      if (sensitivity === 'low') targetRatio = 0.07; // 7%
+      if (sensitivity === 'high') targetRatio = 0.018; // 1.8%
+
+      const now = Date.now();
+      if (changeRatio >= targetRatio && (now - lastCaptureTime) >= MIN_CAPTURE_INTERVAL_MS) {
+        console.log(`[Diff Detected] Screen changed by ${(changeRatio * 100).toFixed(1)}% (threshold: ${(targetRatio * 100).toFixed(1)}%)`);
+        takeMeetingScreenshot('auto');
+      }
+    }
+
+    async function takeMeetingScreenshot(triggerType = 'auto') {
+      const video = document.getElementById('meetingScreenVideo');
+      if (!video || video.readyState < 2) {
+        showToast('画面が選択されていないためスクショを取得できません', 'error');
+        return;
+      }
+
+      // フラッシュアニメーション
+      const flash = document.getElementById('screenshotFlash');
+      if (flash) {
+        flash.style.opacity = '0.7';
+        setTimeout(() => { flash.style.opacity = '0'; }, 180);
+      }
+
+      const now = new Date();
+      lastCaptureTime = Date.now();
+      const hms = formatTimeHMS(now);
+      const fileTime = hms.replace(/:/g, '');
+      const filename = `screen_${fileTime}.jpg`;
+
+      const fullCanvas = document.getElementById('fullCaptureCanvas');
+      fullCanvas.width = video.videoWidth || 1920;
+      fullCanvas.height = video.videoHeight || 1080;
+      const ctx = fullCanvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, fullCanvas.width, fullCanvas.height);
+
+      fullCanvas.toBlob(async (blob) => {
+        if (!blob) return;
+
+        const previewUrl = URL.createObjectURL(blob);
+        const record = {
+          id: 'sc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+          filename: filename,
+          timeStr: hms,
+          triggerType: triggerType, // 'auto' or 'manual'
+          blob: blob,
+          previewUrl: previewUrl,
+          status: 'uploading'
+        };
+
+        meetingScreenshots.push(record);
+        addScreenshotToGalleryUI(record);
+        updateScreenshotCountBadge();
+
+        if (currentMeetingFolder) {
+          try {
+            const base64 = await blobToBase64(blob);
+            const filePath = `00_Inbox/Meetings/${currentMeetingFolder}/images/${filename}`;
+            await commitBinaryFileToGitHub(
+              filePath,
+              base64,
+              `feat(meeting): screenshot ${hms} (${triggerType})`
+            );
+            record.status = 'saved';
+            updateScreenshotItemUI(record.id, 'saved');
+          } catch (err) {
+            console.error('Failed to commit screenshot:', err);
+            record.status = 'error';
+            updateScreenshotItemUI(record.id, 'error');
+            showToast(`スクショ保存エラー (${filename}): ${err.message}`, 'error');
+          }
+        }
+      }, 'image/jpeg', 0.85);
+    }
+
+    function addScreenshotToGalleryUI(record) {
+      const emptyState = document.getElementById('galleryEmptyState');
+      const container = document.getElementById('galleryContainer');
+
+      if (emptyState) emptyState.classList.add('hidden');
+      if (container) container.classList.remove('hidden');
+
+      const card = document.createElement('div');
+      card.id = `item_${record.id}`;
+      card.className = 'relative group bg-zinc-950 rounded-xl overflow-hidden border border-zinc-800/80 shadow-md flex flex-col';
+
+      const typeBadge = record.triggerType === 'manual'
+        ? '<span class="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[9px] font-medium border border-amber-500/30">手動</span>'
+        : '<span class="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 text-[9px] font-medium border border-cyan-500/30">自動</span>';
+
+      card.innerHTML = `
+        <div class="relative aspect-video bg-black flex items-center justify-center overflow-hidden">
+          <img src="${record.previewUrl}" alt="${record.filename}" class="w-full h-full object-cover">
+          <div class="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/75 backdrop-blur text-[10px] font-mono text-zinc-200">
+            ${record.timeStr}
+          </div>
+        </div>
+        <div class="p-2 flex items-center justify-between text-[10px] bg-zinc-900/90 border-t border-zinc-800">
+          <div class="flex items-center gap-1 truncate">
+            ${typeBadge}
+            <span class="truncate font-mono text-zinc-400">${record.filename}</span>
+          </div>
+          <span id="status_${record.id}" class="shrink-0 text-amber-400 font-medium">☁️ 送信中</span>
+        </div>
+      `;
+
+      container.prepend(card);
+    }
+
+    function updateScreenshotItemUI(recordId, status) {
+      const statusEl = document.getElementById(`status_${recordId}`);
+      if (!statusEl) return;
+
+      if (status === 'saved') {
+        statusEl.innerText = '✅ 保存済';
+        statusEl.className = 'shrink-0 text-emerald-400 font-medium';
+      } else if (status === 'error') {
+        statusEl.innerText = '⚠️ エラー';
+        statusEl.className = 'shrink-0 text-red-400 font-medium';
+      }
+    }
+
+    function updateScreenshotCountBadge() {
+      const badge = document.getElementById('badgeScreenshotCount');
+      if (badge) {
+        badge.innerText = `${meetingScreenshots.length} 枚`;
+      }
+    }
+
+    function updateMeetingUIRecordingState(isRecording) {
+      const btn = document.getElementById('btnToggleMeeting');
+      const icon = document.getElementById('meetingBtnIcon');
+      const label = document.getElementById('meetingBtnLabel');
+      const recIndicator = document.getElementById('meetingRecIndicator');
+      const manualBtn = document.getElementById('btnManualCapture');
+
+      if (isRecording) {
+        btn.className = 'py-3.5 px-5 rounded-2xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-semibold text-sm shadow-xl shadow-red-950/50 active:scale-98 transition flex items-center justify-center gap-2';
+        icon.setAttribute('data-lucide', 'square');
+        icon.className = 'w-5 h-5 fill-current';
+        label.innerText = '会議終了（MP3変換 ＆ GitHub保存）';
+        recIndicator.classList.remove('hidden');
+        manualBtn.disabled = false;
+      } else {
+        btn.className = 'py-3.5 px-5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-zinc-950 font-semibold text-sm shadow-xl shadow-emerald-950/50 active:scale-98 transition flex items-center justify-center gap-2';
+        icon.setAttribute('data-lucide', 'play');
+        icon.className = 'w-5 h-5 fill-current';
+        label.innerText = '会議開始（録音 ＆ 自動スクショ）';
+        recIndicator.classList.add('hidden');
+      }
+      lucide.createIcons();
+    }
+
+    function generateMeetingMarkdown(folder, durationSec, screenshots) {
+      const now = new Date();
+      const dateStr = now.toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short' });
+      const durationStr = formatSecondsToTimer(durationSec);
+
+      let md = `# 会議・画面記録: ${dateStr}\n\n`;
+      md += `- **開催フォルダ**: \`00_Inbox/Meetings/${folder}/\`\n`;
+      md += `- **録音時間**: ${durationStr}\n`;
+      md += `- **撮影スクショ**: ${screenshots.length} 枚 (JPEG 形式)\n`;
+      md += `- **音声ファイル**: [meeting_audio.mp3](meeting_audio.mp3) (MP3 形式 / 128kbps mono)\n\n`;
+      md += `---\n\n`;
+      md += `## 🎙️ 会議音声\n\n`;
+      md += `![[meeting_audio.mp3]]\n\n`;
+      md += `> [!TIP]\n`;
+      md += `> NotebookLM や各種AI文字起こしサービスに \`meeting_audio.mp3\` を直接アップロードして解析できます。\n\n`;
+      md += `---\n\n`;
+      md += `## 📸 スクショタイムライン\n\n`;
+
+      if (screenshots.length === 0) {
+        md += `*スクショはありません*\n`;
+      } else {
+        screenshots.forEach((sc, idx) => {
+          const badge = sc.triggerType === 'manual' ? '（手動スクショ）' : '（自動検知）';
+          md += `### ${idx + 1}. ${sc.timeStr} ${badge}\n\n`;
+          md += `![${sc.timeStr}](images/${sc.filename})\n\n`;
+        });
+      }
+
+      return md;
+    }
+
+    async function toggleMeetingRecording() {
+      if (isMeetingRecording) {
+        await stopMeetingRecording();
+      } else {
+        await startMeetingRecording();
+      }
+    }
+
+    async function startMeetingRecording() {
+      if (!meetingScreenStream) {
+        const ok = await selectScreenCapture();
+        if (!ok) return;
+      }
+
+      const cfg = getConfig();
+      if (!cfg.githubToken) {
+        openSettings();
+        showToast('GitHub PAT を設定してください', 'error');
+        return;
+      }
+
+      try {
+        const micStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          }
+        });
+
+        meetingAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const dest = meetingAudioContext.createMediaStreamDestination();
+
+        // マイク音声接続
+        const micSource = meetingAudioContext.createMediaStreamSource(micStream);
+        micSource.connect(dest);
+
+        // 画面共有音声があればミックス
+        if (meetingScreenStream && meetingScreenStream.getAudioTracks().length > 0) {
+          const screenAudioSource = meetingAudioContext.createMediaStreamSource(meetingScreenStream);
+          screenAudioSource.connect(dest);
+        }
+
+        // 音量メーター
+        const analyser = meetingAudioContext.createAnalyser();
+        analyser.fftSize = 64;
+        micSource.connect(analyser);
+        startMeetingAudioMeter(analyser);
+
+        // MediaRecorder開始
+        meetingAudioChunks = [];
+        meetingScreenshots = [];
+        document.getElementById('galleryContainer').innerHTML = '';
+        document.getElementById('galleryEmptyState').classList.remove('hidden');
+        updateScreenshotCountBadge();
+
+        meetingMediaRecorder = new MediaRecorder(dest.stream);
+        meetingMediaRecorder.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) {
+            meetingAudioChunks.push(e.data);
+          }
+        };
+        meetingMediaRecorder.start(1000);
+
+        // 会議フォルダ名の決定 (YYYY-MM-DD_HHmmss)
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, '0');
+        const d = String(now.getDate()).padStart(2, '0');
+        const h = String(now.getHours()).padStart(2, '0');
+        const mi = String(now.getMinutes()).padStart(2, '0');
+        const s = String(now.getSeconds()).padStart(2, '0');
+        currentMeetingFolder = `${y}-${m}-${d}_${h}${mi}${s}`;
+
+        isMeetingRecording = true;
+        meetingStartTime = Date.now();
+        prevFrameData = null;
+        lastCaptureTime = 0;
+
+        updateMeetingUIRecordingState(true);
+        document.getElementById('meetingSavedFolderLabel').innerText = `00_Inbox/Meetings/${currentMeetingFolder}/`;
+        document.getElementById('meetingSuccessCard').classList.add('hidden');
+
+        // 会議タイマー開始
+        meetingTimerId = setInterval(updateMeetingTimer, 1000);
+
+        // 画面変化検知ループ開始 (2.5秒間隔)
+        meetingDiffIntervalId = setInterval(checkScreenDifference, 2500);
+
+        // 会議開始時の初期スクショを撮影
+        setTimeout(() => {
+          takeMeetingScreenshot('manual');
+        }, 1000);
+
+        showToast('会議記録を開始しました（録音＆自動スクショ中）', 'success');
+
+      } catch (err) {
+        console.error('Failed to start meeting recording:', err);
+        showToast(`マイクまたは録音の開始に失敗しました: ${err.message}`, 'error');
+      }
+    }
+
+    async function stopMeetingRecording() {
+      if (!isMeetingRecording) return;
+
+      if (meetingDiffIntervalId) clearInterval(meetingDiffIntervalId);
+      if (meetingTimerId) clearInterval(meetingTimerId);
+      if (meetingMeterAnimId) cancelAnimationFrame(meetingMeterAnimId);
+
+      isMeetingRecording = false;
+      updateMeetingUIRecordingState(false);
+
+      const processingCard = document.getElementById('meetingProcessingCard');
+      const processingMsg = document.getElementById('meetingProcessingMsg');
+      processingCard.classList.remove('hidden');
+      processingMsg.innerText = '音声データをMP3に変換中...';
+
+      // 録音停止
+      await new Promise((resolve) => {
+        meetingMediaRecorder.onstop = resolve;
+        meetingMediaRecorder.stop();
+      });
+
+      const rawBlob = new Blob(meetingAudioChunks, { type: meetingMediaRecorder.mimeType || 'audio/webm' });
+      const durationSeconds = Math.round((Date.now() - meetingStartTime) / 1000);
+
+      try {
+        // 1. AudioBuffer にデコード
+        const arrayBuf = await rawBlob.arrayBuffer();
+        const audioBuf = await meetingAudioContext.decodeAudioData(arrayBuf);
+
+        // 2. LAME MP3 エンコード
+        const mp3Blob = encodeAudioBufferToMp3(audioBuf, 128);
+        meetingLastMp3Blob = mp3Blob;
+
+        // 3. GitHubへ MP3 アップロード
+        processingMsg.innerText = 'GitHubへMP3音声を保存中...';
+        const mp3Base64 = await blobToBase64(mp3Blob);
+        const mp3Path = `00_Inbox/Meetings/${currentMeetingFolder}/meeting_audio.mp3`;
+        await commitBinaryFileToGitHub(
+          mp3Path,
+          mp3Base64,
+          `feat(meeting): meeting audio mp3 (${currentMeetingFolder})`
+        );
+
+        // 4. GitHubへ 会議README.md 生成＆アップロード
+        processingMsg.innerText = '会議サマリー（README.md）を生成中...';
+        const readmeContent = generateMeetingMarkdown(currentMeetingFolder, durationSeconds, meetingScreenshots);
+        const readmeBase64 = utf8ToBase64(readmeContent);
+        const readmePath = `00_Inbox/Meetings/${currentMeetingFolder}/README.md`;
+        await commitBinaryFileToGitHub(
+          readmePath,
+          readmeBase64,
+          `docs(meeting): meeting summary & screenshots (${currentMeetingFolder})`
+        );
+
+        // 5. 完了UI表示
+        processingCard.classList.add('hidden');
+        document.getElementById('meetingSuccessCard').classList.remove('hidden');
+
+        document.getElementById('statDuration').innerText = formatSecondsToTimer(durationSeconds);
+        document.getElementById('statScreenshots').innerText = `${meetingScreenshots.length} 枚 (JPEG)`;
+
+        const cfg = getConfig();
+        document.getElementById('linkGitHubFolder').href = `https://github.com/${cfg.githubOwner}/${cfg.githubRepo}/tree/${cfg.githubBranch || 'main'}/00_Inbox/Meetings/${currentMeetingFolder}`;
+
+        showToast('会議記録の全データ（MP3 & JPEG & ノート）を保存しました！', 'success');
+
+      } catch (err) {
+        console.error('Error saving meeting:', err);
+        processingCard.classList.add('hidden');
+        showToast(`会議保存中にエラーが発生しました: ${err.message}`, 'error');
+      } finally {
+        if (meetingAudioContext && meetingAudioContext.state !== 'closed') {
+          meetingAudioContext.close();
+        }
+      }
+    }
+
+    function downloadLastMeetingMp3() {
+      if (!meetingLastMp3Blob) {
+        showToast('ダウンロード可能なMP3がありません', 'error');
+        return;
+      }
+      const filename = `${currentMeetingFolder || 'meeting'}_audio.mp3`;
+      const url = URL.createObjectURL(meetingLastMp3Blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('MP3をダウンロードしました（NotebookLM等へ投入可能）', 'success');
+    }
+
     // Event Listeners
     window.addEventListener('DOMContentLoaded', () => {
       lucide.createIcons();
@@ -1503,6 +2407,28 @@
         const inp = document.getElementById('inputGeminiApiKey');
         inp.type = inp.type === 'password' ? 'text' : 'password';
       });
+
+      // Mode Switching (Reflection vs PC Meeting)
+      document.getElementById('tabBtnReflection').addEventListener('click', () => switchAppMode('reflection'));
+      document.getElementById('tabBtnMeeting').addEventListener('click', () => switchAppMode('meeting'));
+
+      // PC Meeting & Screen Recorder Listeners
+      document.getElementById('btnSelectScreen').addEventListener('click', selectScreenCapture);
+      document.getElementById('btnChangeScreen').addEventListener('click', selectScreenCapture);
+      document.getElementById('btnToggleMeeting').addEventListener('click', toggleMeetingRecording);
+      document.getElementById('btnManualCapture').addEventListener('click', () => takeMeetingScreenshot('manual'));
+      document.getElementById('btnDownloadMp3').addEventListener('click', downloadLastMeetingMp3);
+      document.getElementById('btnDismissMeetingSuccess').addEventListener('click', () => {
+        document.getElementById('meetingSuccessCard').classList.add('hidden');
+      });
+
+      // Restore Saved Mode
+      const savedMode = localStorage.getItem('voice_reflection_app_mode');
+      if (savedMode === 'meeting') {
+        switchAppMode('meeting');
+      } else {
+        switchAppMode('reflection');
+      }
     });
   </script>
 </body>

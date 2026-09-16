@@ -138,4 +138,12 @@ voice-reflection-agent/
 5. **[x] Step 5: iPhone側キュー送信クライアントの構築**:
    - **Cloudflare Pages PWA（推奨）**: 単一HTML（`web/index.html`、Screen Wake Lockスリープ防止、MediaRecorder録音＋リアルタイム音量波形、Gemini Flash文字起こし、GitHub Direct Commit）の実装完了。
    - **iOSショートカット（代替）**: ボイスメモ共有からGitHub APIへキュー投入するレシピ作成。
+6. **[x] Step 6: PC向け会議・画面記録モード（JPEGスクショ自動取得＆MP3出力＆GitHub会議フォルダ自動保存）**:
+   - 複数モニタ対応の画面キャプチャ（`getDisplayMedia`）。
+   - 画面変化の自動検知（CanvasピクセルRGB差分判定、感度調整、最低5秒クールダウン連打防止）。
+   - 手動スクショボタン（ワンタップでいつでも即時JPEG取得）。
+   - ブラウザ内MP3エンコーダ（`lamejs`）による高音質・軽量MP3生成（NotebookLMへ直接ドラッグ＆ドロップ可能）。
+   - GitHub Contents API への非同期保存（`00_Inbox/Meetings/YYYY-MM-DD_HHmmss/` 配下に `meeting_audio.mp3`、`images/screen_HHmmss.jpg`、スクショ目次ノート `README.md` を自動コミット）。
+   - 会議終了後のローカルMP3保存ボタン（NotebookLM投入サポート）。
+
 

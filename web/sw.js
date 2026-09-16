@@ -1,4 +1,4 @@
-const CACHE_NAME = 'voice-reflection-v1';
+const CACHE_NAME = 'voice-reflection-v2';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
