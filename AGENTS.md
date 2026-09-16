@@ -145,5 +145,9 @@ voice-reflection-agent/
    - ブラウザ内MP3エンコーダ（`lamejs`）による高音質・軽量MP3生成（NotebookLMへ直接ドラッグ＆ドロップ可能）。
    - GitHub Contents API への非同期保存（`00_Inbox/Meetings/YYYY-MM-DD_HHmmss/` 配下に `meeting_audio.mp3`、`images/screen_HHmmss.jpg`、スクショ目次ノート `README.md` を自動コミット）。
    - 会議終了後のローカルMP3保存ボタン（NotebookLM投入サポート）。
+7. **[x] Step 7: 社内GitLabバックエンド対応・Gemini API任意化・会議記録ローカル保存（ZIP一括）モード**:
+   - `webapp-obsidian` や `obsidian-todo-calendar` に倣い、GitHub だけでなく社内 GitLab（Base URL, Project ID, PAT, Branch）および「ローカル保存のみ」の3プロバイダ切り替えを実装。
+   - 会社環境での Gemini API 不可に対応し、Gemini API Key をオプショナル化。未設定時もエラーにならず、文字起こしをスキップして手動メモやローカル音声保存でキュー送信可能（将来の社内ホストWhisper連携への導線を確保）。
+   - 会議記録モードでの Git 連携必須バリデーションを解除。Git未設定でも即座に会議録音・キャプチャを開始可能にし、会議終了後に「📦 会議一式をまとめて保存 (ZIP)」（MP3 + JPEG群 + README.md）および「📄 議事録(README.md)保存」をワンクリックで行える完全ローカル運用フローを確立。
 
 

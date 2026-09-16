@@ -19,6 +19,8 @@
   <script src="https://unpkg.com/lucide@latest"></script>
   <!-- LAME MP3 Encoder (Browser-native MP3 encoding) -->
   <script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js"></script>
+  <!-- JSZip (Browser-native ZIP archive generation for local saving) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
   <script>
     tailwind.config = {
@@ -314,7 +316,7 @@
             <i data-lucide="x" class="w-4 h-4 text-zinc-400"></i> やり直す
           </button>
           <button id="commitBtn" class="flex-[2] py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-zinc-950 text-xs font-semibold shadow-lg shadow-emerald-950/40 active:scale-98 transition flex items-center justify-center gap-1.5">
-            <i data-lucide="send" class="w-4 h-4"></i> キュー送信（GitHub）
+            <i data-lucide="send" class="w-4 h-4"></i> <span id="commitBtnLabel">キュー送信（GitHub）</span>
           </button>
         </div>
       </div>
@@ -325,7 +327,7 @@
           <i data-lucide="check" class="w-6 h-6"></i>
         </div>
         <div>
-          <h3 class="text-sm font-semibold text-zinc-100">GitHub Queue に送信完了！</h3>
+          <h3 id="queueSuccessTitle" class="text-sm font-semibold text-zinc-100">Queue に送信完了！</h3>
           <p class="text-xs text-zinc-400 mt-1">
             MacBookの常駐デーモンが検知し、<span class="text-emerald-400 font-medium">agy (Gemini 3.5+)</span> が深層リフレクションを自動生成します。
           </p>
@@ -513,14 +515,25 @@
         </div>
 
         <!-- Download & Obsidian Actions -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-          <button id="btnDownloadMp3" type="button" class="py-2.5 px-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-zinc-950 text-xs font-semibold shadow-md active:scale-98 transition flex items-center justify-center gap-1.5">
-            <i data-lucide="download" class="w-4 h-4"></i>
-            <span>📥 MP3音声をPCに保存（NotebookLM用）</span>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+          <button id="btnDownloadZip" type="button" class="py-2.5 px-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-zinc-950 text-xs font-semibold shadow-md active:scale-98 transition flex items-center justify-center gap-1.5">
+            <i data-lucide="archive" class="w-4 h-4"></i>
+            <span>📦 会議一式を保存 (ZIP)</span>
           </button>
-          <a id="linkGitHubFolder" href="#" target="_blank" rel="noopener noreferrer" class="py-2.5 px-3 rounded-xl bg-zinc-800 hover:bg-zinc-750 text-zinc-200 text-xs font-medium border border-zinc-700/80 transition flex items-center justify-center gap-1.5">
-            <i data-lucide="github" class="w-4 h-4 text-zinc-400"></i>
-            <span>GitHubで会議フォルダを開く</span>
+          <button id="btnDownloadMp3" type="button" class="py-2.5 px-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-zinc-950 text-xs font-semibold shadow-md active:scale-98 transition flex items-center justify-center gap-1.5">
+            <i data-lucide="music" class="w-4 h-4"></i>
+            <span>📥 MP3音声を保存</span>
+          </button>
+          <button id="btnDownloadReadme" type="button" class="py-2.5 px-3 rounded-xl bg-zinc-800 hover:bg-zinc-750 text-zinc-200 text-xs font-medium border border-zinc-700/80 transition flex items-center justify-center gap-1.5">
+            <i data-lucide="file-text" class="w-4 h-4 text-emerald-400"></i>
+            <span>📄 議事録 (MD) 保存</span>
+          </button>
+        </div>
+
+        <div id="repoLinkRow" class="pt-1">
+          <a id="linkGitHubFolder" href="#" target="_blank" rel="noopener noreferrer" class="py-2 px-3 rounded-xl bg-zinc-950/70 hover:bg-zinc-800 text-zinc-300 text-xs font-mono border border-zinc-800 transition flex items-center justify-center gap-1.5">
+            <i id="linkRepoIcon" data-lucide="git-branch" class="w-4 h-4 text-zinc-400"></i>
+            <span id="linkRepoLabel">リポジトリで会議フォルダを開く</span>
           </a>
         </div>
       </div>
@@ -533,7 +546,7 @@
             <h4 class="text-xs font-semibold text-zinc-200">撮影されたスクショ一覧 (JPEG)</h4>
             <span id="badgeScreenshotCount" class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400">0 枚</span>
           </div>
-          <span class="text-[10px] text-zinc-500">※ GitHubへ即時コミットされます</span>
+          <span id="meetingCommitNotice" class="text-[10px] text-zinc-500">※ Gitへ即時コミットされます</span>
         </div>
 
         <!-- Gallery Grid / Strip -->
@@ -564,11 +577,30 @@
       <!-- Modal Body -->
       <div class="p-5 space-y-4 overflow-y-auto flex-1 text-xs">
         
+        <!-- Git Provider Selector Tabs -->
+        <div class="space-y-2">
+          <label class="block text-[11px] font-semibold text-zinc-300">保存先バックエンド (Git連携)</label>
+          <div class="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-zinc-900 border border-zinc-800 text-[11px]">
+            <button type="button" id="providerBtnGithub" class="py-1.5 px-2 rounded-lg font-medium transition flex items-center justify-center gap-1 bg-zinc-800 text-zinc-100 shadow-sm">
+              <i data-lucide="github" class="w-3.5 h-3.5"></i>
+              <span>GitHub</span>
+            </button>
+            <button type="button" id="providerBtnGitlab" class="py-1.5 px-2 rounded-lg font-medium text-zinc-400 hover:text-zinc-200 transition flex items-center justify-center gap-1">
+              <span class="text-orange-400">🦊</span>
+              <span>社内GitLab</span>
+            </button>
+            <button type="button" id="providerBtnLocal" class="py-1.5 px-2 rounded-lg font-medium text-zinc-400 hover:text-zinc-200 transition flex items-center justify-center gap-1">
+              <i data-lucide="hard-drive" class="w-3.5 h-3.5 text-cyan-400"></i>
+              <span>ローカルのみ</span>
+            </button>
+          </div>
+        </div>
+
         <!-- GitHub Settings Group -->
-        <div class="space-y-3">
+        <div id="groupSettingsGithub" class="space-y-3">
           <div class="flex items-center justify-between">
             <span class="font-semibold text-zinc-200 flex items-center gap-1.5">
-              <i data-lucide="github" class="w-3.5 h-3.5 text-zinc-400"></i> GitHub 連携 (Queue用)
+              <i data-lucide="github" class="w-3.5 h-3.5 text-zinc-400"></i> GitHub 連携設定
             </span>
           </div>
 
@@ -600,6 +632,54 @@
           </div>
         </div>
 
+        <!-- GitLab Settings Group -->
+        <div id="groupSettingsGitlab" class="hidden space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="font-semibold text-zinc-200 flex items-center gap-1.5">
+              <span class="text-orange-400">🦊</span> 社内 GitLab 連携設定
+            </span>
+          </div>
+
+          <div>
+            <label class="block text-[11px] text-zinc-400 mb-1">GitLab API URL (Base URL)</label>
+            <input type="text" id="inputGitlabUrl" placeholder="https://gitlab.example.corp または https://alb-url/api/v4" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-zinc-200 focus:outline-none focus:border-orange-500 font-mono text-[11px]">
+            <p class="text-[10px] text-zinc-500 mt-1">※ 社内GitLabサーバーまたはALB/リバースプロキシURL。末尾の <code>/api/v4</code> は自動補完されます</p>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-[11px] text-zinc-400 mb-1">Project ID / Path</label>
+              <input type="text" id="inputGitlabProjectId" placeholder="group/project または 12345" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-zinc-200 focus:outline-none focus:border-orange-500 font-mono text-[11px]">
+            </div>
+            <div>
+              <label class="block text-[11px] text-zinc-400 mb-1">Branch</label>
+              <input type="text" id="inputGitlabBranch" placeholder="main" value="main" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-zinc-200 focus:outline-none focus:border-orange-500 font-mono text-[11px]">
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-[11px] text-zinc-400 mb-1">Personal Access Token (PAT)</label>
+            <div class="relative">
+              <input type="password" id="inputGitlabToken" placeholder="glpat-xxxxxxxxxxxxxxxxxxxx" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-zinc-200 focus:outline-none focus:border-orange-500 font-mono text-[11px]">
+              <button type="button" id="toggleGitlabTokenVisibility" class="absolute right-2.5 top-2 text-zinc-500 hover:text-zinc-300">
+                <i data-lucide="eye" class="w-4 h-4"></i>
+              </button>
+            </div>
+            <p class="text-[10px] text-zinc-500 mt-1">※ <code>api</code> または <code>write_repository</code> 権限が必要です</p>
+          </div>
+        </div>
+
+        <!-- Local Only Settings Notice -->
+        <div id="groupSettingsLocal" class="hidden p-3 rounded-xl bg-zinc-900/80 border border-zinc-800 text-zinc-300 space-y-1.5">
+          <div class="flex items-center gap-1.5 font-semibold text-cyan-400">
+            <i data-lucide="hard-drive" class="w-4 h-4"></i>
+            <span>ローカル保存モード（Git連携なし）</span>
+          </div>
+          <p class="text-[11px] text-zinc-400 leading-relaxed">
+            クラウドGit（GitHub/GitLab）への自動送信を行わず、録音データや会議記録（MP3・スクショ・議事録）を手元PCや端末内に直接保存・ダウンロードします。社内ネットワークやローカル運用に最適です。
+          </p>
+        </div>
+
         <hr class="border-zinc-800">
 
         <!-- Gemini API Group -->
@@ -607,18 +687,19 @@
           <div class="flex items-center justify-between">
             <span class="font-semibold text-zinc-200 flex items-center gap-1.5">
               <i data-lucide="sparkles" class="w-3.5 h-3.5 text-cyan-400"></i> Gemini API (文字起こし用)
+              <span class="text-[10px] font-normal px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">任意</span>
             </span>
           </div>
 
           <div>
             <label class="block text-[11px] text-zinc-400 mb-1">Google AI Studio API Key</label>
             <div class="relative">
-              <input type="password" id="inputGeminiApiKey" placeholder="AIzaSy..." class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-zinc-200 focus:outline-none focus:border-emerald-500 font-mono text-[11px]">
+              <input type="password" id="inputGeminiApiKey" placeholder="AIzaSy... (社内利用時は空欄のままでOK)" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-zinc-200 focus:outline-none focus:border-emerald-500 font-mono text-[11px]">
               <button type="button" id="toggleGeminiKeyVisibility" class="absolute right-2.5 top-2 text-zinc-500 hover:text-zinc-300">
                 <i data-lucide="eye" class="w-4 h-4"></i>
               </button>
             </div>
-            <p class="text-[10px] text-zinc-500 mt-1">※ aistudio.google.com で無料取得可能</p>
+            <p class="text-[10px] text-zinc-500 mt-1">※ 会社環境などGemini APIが使えない場合は空欄で利用可能（文字起こしスキップ・手動メモ・音声保存に対応。将来の社内Whisper連携にも対応予定）</p>
           </div>
 
           <div>
@@ -706,6 +787,7 @@
     let meetingScreenshots = [];
     let currentMeetingFolder = null;
     let meetingLastMp3Blob = null;
+    let meetingLastReadmeContent = '';
     let isMeetingRecording = false;
     let prevFrameData = null;
     let lastCaptureTime = 0;
@@ -788,13 +870,121 @@
     }
 
     const defaultConfig = {
+      gitProvider: 'github', // 'github' | 'gitlab' | 'local'
       githubToken: '',
       githubOwner: 'hatomachi',
       githubRepo: 'personal-vault',
       githubBranch: 'main',
+      gitlabUrl: '',
+      gitlabProjectId: '',
+      gitlabBranch: 'main',
+      gitlabToken: '',
       geminiApiKey: '',
       geminiModel: 'gemini-2.5-flash'
     };
+
+    let selectedSettingsProvider = 'github';
+
+    // GitLab URL & Identifier Utilities
+    function normalizeGitLabBaseUrl(rawUrl) {
+      let url = (rawUrl || '').trim();
+      if (!url) return '';
+      url = url.replace(/\/+$/, '');
+      if (url.endsWith('/api/v4')) return url;
+      if (url.startsWith('/')) return url;
+      try {
+        const parsed = new URL(url);
+        if (parsed.pathname === '' || parsed.pathname === '/') return `${url}/api/v4`;
+        if (!parsed.pathname.includes('/api')) return `${url}/api/v4`;
+      } catch {
+        if (!url.includes('/api')) return `${url}/api/v4`;
+      }
+      return url;
+    }
+
+    function encodeProjectId(projectId) {
+      const trimmed = (projectId || '').trim();
+      if (/^\d+$/.test(trimmed)) return trimmed;
+      try {
+        return encodeURIComponent(decodeURIComponent(trimmed));
+      } catch {
+        return encodeURIComponent(trimmed);
+      }
+    }
+
+    function encodeFilePath(filePath) {
+      return encodeURIComponent(filePath.replace(/^\/+/, ''));
+    }
+
+    // GitLab Commits API Helper
+    async function commitFileToGitLab(filePath, base64Content, commitMessage) {
+      const cfg = getConfig();
+      const baseUrl = normalizeGitLabBaseUrl(cfg.gitlabUrl);
+      const encodedId = encodeProjectId(cfg.gitlabProjectId);
+      const token = (cfg.gitlabToken || '').trim();
+      const branch = cfg.gitlabBranch || 'main';
+
+      if (!baseUrl || !encodedId || !token) {
+        throw new Error('GitLabのURL、Project ID、Tokenが正しく設定されていません');
+      }
+
+      const commitUrl = `${baseUrl}/projects/${encodedId}/repository/commits`;
+      const cleanPath = filePath.replace(/^\/+/, '');
+      const payload = {
+        branch: branch,
+        commit_message: commitMessage,
+        actions: [
+          {
+            action: 'create',
+            file_path: cleanPath,
+            content: base64Content,
+            encoding: 'base64'
+          }
+        ]
+      };
+
+      const res = await fetch(commitUrl, {
+        method: 'POST',
+        headers: {
+          'PRIVATE-TOKEN': token,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        // If file already exists, retry with 'update'
+        if (err.message && (err.message.includes('already exists') || err.message.includes('A file with this name already exists'))) {
+          payload.actions[0].action = 'update';
+          const updateRes = await fetch(commitUrl, {
+            method: 'POST',
+            headers: {
+              'PRIVATE-TOKEN': token,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+          });
+          if (updateRes.ok) return await updateRes.json();
+        }
+        throw new Error(err.message || `GitLab API エラー (Status: ${res.status})`);
+      }
+      return await res.json();
+    }
+
+    // Unified Binary / File Commit Helper
+    async function commitBinaryFile(filePath, base64Content, commitMessage) {
+      const cfg = getConfig();
+      const provider = cfg.gitProvider || 'github';
+
+      if (provider === 'local') {
+        return { local: true };
+      } else if (provider === 'gitlab') {
+        return await commitFileToGitLab(filePath, base64Content, commitMessage);
+      } else {
+        return await commitBinaryFileToGitHub(filePath, base64Content, commitMessage);
+      }
+    }
 
     // Calculate usage tokens and estimated cost in JPY
     function calculateUsageCost(usage, model = '') {
@@ -1249,10 +1439,14 @@
     async function handleTranscription(blob) {
       const cfg = getConfig();
       if (!cfg.geminiApiKey) {
-        showToast('Gemini API Key が未設定です。手動入力または設定を行ってください', 'error');
-        openSettings();
+        // Gemini API is optional (e.g. corporate environment or offline)
+        document.getElementById('loadingCard').classList.add('hidden');
         document.getElementById('transcriptionCard').classList.remove('hidden');
+        document.getElementById('transcriptionInput').value = '';
+        document.getElementById('transcriptionInput').placeholder = 'Gemini API未設定のため文字起こしをスキップしました。必要に応じて手動で内省メモを入力してキューに送信できます（空欄でも音声記録として送信可能）。';
+        updateCharCount();
         setUIState('idle');
+        showToast('Gemini未設定のため文字起こしをスキップしました（手動入力・音声保存可能）', 'info');
         return;
       }
 
@@ -1338,24 +1532,71 @@
       document.getElementById('charCount').innerText = `${text.length} 文字`;
     }
 
-    // Direct Commit to GitHub Queue
+    // Direct Commit to Queue (GitHub / GitLab / Local)
     async function commitToGitHubQueue() {
       const cfg = getConfig();
-      const rawText = document.getElementById('transcriptionInput').value.trim();
+      const provider = cfg.gitProvider || 'github';
+      let rawText = document.getElementById('transcriptionInput').value.trim();
 
       if (!rawText) {
-        showToast('テキストが空です', 'error');
+        rawText = '（音声メモ - 文字起こしスキップ）';
+      }
+
+      if (provider === 'local') {
+        // Local mode: record saved in browser history without cloud commit
+        setUIState('processing');
+        document.getElementById('loadingCard').classList.remove('hidden');
+        document.getElementById('loadingMessage').innerText = 'ローカルに記録を保存中...';
+
+        try {
+          const now = new Date();
+          const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+          const timestamp = now.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+
+          addHistoryItem({
+            filename: `local-${dateStr}-${Date.now()}.json`,
+            date: dateStr,
+            timestamp: timestamp,
+            preview: rawText.slice(0, 80) + (rawText.length > 80 ? '...' : ''),
+            length: rawText.length,
+            usageText: null
+          });
+
+          document.getElementById('loadingCard').classList.add('hidden');
+          document.getElementById('transcriptionCard').classList.add('hidden');
+          document.getElementById('successCard').classList.remove('hidden');
+          document.getElementById('queueSuccessTitle').innerText = 'ローカル記録完了！';
+
+          // Clear backup draft from IndexedDB
+          await clearAudioDraft();
+          document.getElementById('draftRecoveryBanner').classList.add('hidden');
+          showToast('ローカル記録を保存しました（音声は手元に保持されています）', 'success');
+        } finally {
+          setUIState('idle');
+        }
         return;
       }
-      if (!cfg.githubToken) {
-        showToast('GitHub Personal Access Token (PAT) を設定してください', 'error');
-        openSettings();
-        return;
+
+      if (provider === 'gitlab') {
+        if (!cfg.gitlabToken || !cfg.gitlabUrl || !cfg.gitlabProjectId) {
+          showToast('社内 GitLab の設定（URL, Project ID, Token）を入力してください', 'error');
+          openSettings();
+          return;
+        }
+      } else {
+        // github
+        if (!cfg.githubToken) {
+          showToast('GitHub Personal Access Token (PAT) を設定してください', 'error');
+          openSettings();
+          return;
+        }
       }
 
       setUIState('processing');
       document.getElementById('loadingCard').classList.remove('hidden');
-      document.getElementById('loadingMessage').innerText = 'GitHub personal-vault のキューにコミット中...';
+      document.getElementById('loadingMessage').innerText = provider === 'gitlab'
+        ? '社内 GitLab のキューにコミット中...'
+        : 'GitHub personal-vault のキューにコミット中...';
 
       try {
         const now = new Date();
@@ -1380,25 +1621,28 @@
         const jsonContent = JSON.stringify(queuePayload, null, 2);
         const base64Content = utf8ToBase64(jsonContent);
 
-        const commitUrl = `https://api.github.com/repos/${cfg.githubOwner}/${cfg.githubRepo}/contents/${filePath}`;
+        if (provider === 'gitlab') {
+          await commitFileToGitLab(filePath, base64Content, `feat(queue): new voice reflection queue (${filename})`);
+        } else {
+          const commitUrl = `https://api.github.com/repos/${cfg.githubOwner}/${cfg.githubRepo}/contents/${filePath}`;
+          const response = await fetch(commitUrl, {
+            method: 'PUT',
+            headers: {
+              'Authorization': `Bearer ${cfg.githubToken}`,
+              'Accept': 'application/vnd.github.v3+json',
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              message: `feat(queue): new voice reflection queue (${filename})`,
+              content: base64Content,
+              branch: cfg.githubBranch || 'main'
+            })
+          });
 
-        const response = await fetch(commitUrl, {
-          method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${cfg.githubToken}`,
-            'Accept': 'application/vnd.github.v3+json',
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            message: `feat(queue): new voice reflection queue (${filename})`,
-            content: base64Content,
-            branch: cfg.githubBranch || 'main'
-          })
-        });
-
-        if (!response.ok) {
-          const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.message || `GitHub API エラー (Status: ${response.status})`);
+          if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.message || `GitHub API エラー (Status: ${response.status})`);
+          }
         }
 
         // Show usage on success card if available
@@ -1423,6 +1667,9 @@
         document.getElementById('loadingCard').classList.add('hidden');
         document.getElementById('transcriptionCard').classList.add('hidden');
         document.getElementById('successCard').classList.remove('hidden');
+        document.getElementById('queueSuccessTitle').innerText = provider === 'gitlab'
+          ? '社内 GitLab Queue に送信完了！'
+          : 'GitHub Queue に送信完了！';
 
         // Clear backup draft from IndexedDB since it has been safely committed
         await clearAudioDraft();
@@ -1433,21 +1680,62 @@
       } catch (err) {
         console.error('Commit failed:', err);
         document.getElementById('loadingCard').classList.add('hidden');
-        showToast('GitHub送信エラー: ' + err.message, 'error');
+        showToast(`${provider === 'gitlab' ? 'GitLab' : 'GitHub'}送信エラー: ` + err.message, 'error');
       } finally {
         setUIState('idle');
+      }
+    }
+    const commitToQueue = commitToGitHubQueue;
+
+    // Provider Tab Switcher in Settings Modal
+    function setSettingsProviderTab(provider) {
+      selectedSettingsProvider = provider;
+      const btnGh = document.getElementById('providerBtnGithub');
+      const btnGl = document.getElementById('providerBtnGitlab');
+      const btnLoc = document.getElementById('providerBtnLocal');
+      const groupGh = document.getElementById('groupSettingsGithub');
+      const groupGl = document.getElementById('groupSettingsGitlab');
+      const groupLoc = document.getElementById('groupSettingsLocal');
+
+      // Reset styles
+      [btnGh, btnGl, btnLoc].forEach(b => {
+        b.className = 'py-1.5 px-2 rounded-lg font-medium text-zinc-400 hover:text-zinc-200 transition flex items-center justify-center gap-1';
+      });
+      groupGh.classList.add('hidden');
+      groupGl.classList.add('hidden');
+      groupLoc.classList.add('hidden');
+
+      if (provider === 'gitlab') {
+        btnGl.className = 'py-1.5 px-2 rounded-lg font-medium transition flex items-center justify-center gap-1 bg-zinc-800 text-zinc-100 shadow-sm';
+        groupGl.classList.remove('hidden');
+      } else if (provider === 'local') {
+        btnLoc.className = 'py-1.5 px-2 rounded-lg font-medium transition flex items-center justify-center gap-1 bg-zinc-800 text-zinc-100 shadow-sm';
+        groupLoc.classList.remove('hidden');
+      } else {
+        // github
+        btnGh.className = 'py-1.5 px-2 rounded-lg font-medium transition flex items-center justify-center gap-1 bg-zinc-800 text-zinc-100 shadow-sm';
+        groupGh.classList.remove('hidden');
       }
     }
 
     // Modal & Settings Helpers
     function openSettings() {
       const cfg = getConfig();
-      document.getElementById('inputGithubToken').value = cfg.githubToken;
-      document.getElementById('inputGithubOwner').value = cfg.githubOwner;
-      document.getElementById('inputGithubRepo').value = cfg.githubRepo;
-      document.getElementById('inputGithubBranch').value = cfg.githubBranch;
-      document.getElementById('inputGeminiApiKey').value = cfg.geminiApiKey;
-      document.getElementById('selectGeminiModel').value = cfg.geminiModel;
+      selectedSettingsProvider = cfg.gitProvider || 'github';
+      setSettingsProviderTab(selectedSettingsProvider);
+
+      document.getElementById('inputGithubToken').value = cfg.githubToken || '';
+      document.getElementById('inputGithubOwner').value = cfg.githubOwner || 'hatomachi';
+      document.getElementById('inputGithubRepo').value = cfg.githubRepo || 'personal-vault';
+      document.getElementById('inputGithubBranch').value = cfg.githubBranch || 'main';
+
+      document.getElementById('inputGitlabUrl').value = cfg.gitlabUrl || '';
+      document.getElementById('inputGitlabProjectId').value = cfg.gitlabProjectId || '';
+      document.getElementById('inputGitlabBranch').value = cfg.gitlabBranch || 'main';
+      document.getElementById('inputGitlabToken').value = cfg.gitlabToken || '';
+
+      document.getElementById('inputGeminiApiKey').value = cfg.geminiApiKey || '';
+      document.getElementById('selectGeminiModel').value = cfg.geminiModel || 'gemini-2.5-flash';
 
       document.getElementById('testResultBox').classList.add('hidden');
       document.getElementById('settingsModal').classList.remove('hidden');
@@ -1494,14 +1782,58 @@
 
     function updateDisplayWithConfig() {
       const cfg = getConfig();
-      document.getElementById('targetRepoDisplay').innerText = cfg.githubRepo;
-      document.getElementById('targetBranchDisplay').innerText = cfg.githubBranch;
+      const provider = cfg.gitProvider || 'github';
+
+      // 1. Reflection & Meeting Vault Targets
+      let repoText = '';
+      let branchText = '';
+      let commitBtnText = '';
+      let commitNotice = '';
+
+      if (provider === 'local') {
+        repoText = '💾 ローカル保存のみ';
+        branchText = 'クラウド送信なし';
+        commitBtnText = 'ローカルに記録';
+        commitNotice = '※ ローカル保持（クラウド送信なし）';
+      } else if (provider === 'gitlab') {
+        repoText = `🦊 ${cfg.gitlabProjectId || 'GitLab'}`;
+        branchText = cfg.gitlabBranch || 'main';
+        commitBtnText = 'キュー送信（GitLab）';
+        commitNotice = '※ GitLabへ即時コミットされます';
+      } else {
+        repoText = `🐙 ${cfg.githubRepo || 'personal-vault'}`;
+        branchText = cfg.githubBranch || 'main';
+        commitBtnText = 'キュー送信（GitHub）';
+        commitNotice = '※ GitHubへ即時コミットされます';
+      }
+
+      const targetRepoDisplay = document.getElementById('targetRepoDisplay');
+      const targetBranchDisplay = document.getElementById('targetBranchDisplay');
+      if (targetRepoDisplay) targetRepoDisplay.innerText = repoText;
+      if (targetBranchDisplay) targetBranchDisplay.innerText = branchText;
+
       const meetingRepoEl = document.getElementById('meetingTargetRepoDisplay');
       const meetingBranchEl = document.getElementById('meetingTargetBranchDisplay');
-      if (meetingRepoEl) meetingRepoEl.innerText = cfg.githubRepo;
-      if (meetingBranchEl) meetingBranchEl.innerText = cfg.githubBranch;
+      if (meetingRepoEl) meetingRepoEl.innerText = repoText;
+      if (meetingBranchEl) meetingBranchEl.innerText = branchText;
 
-      const isMissing = !cfg.githubToken || !cfg.geminiApiKey;
+      const commitBtnLabel = document.getElementById('commitBtnLabel');
+      if (commitBtnLabel) commitBtnLabel.innerText = commitBtnText;
+
+      const meetingCommitNotice = document.getElementById('meetingCommitNotice');
+      if (meetingCommitNotice) meetingCommitNotice.innerText = commitNotice;
+
+      // 2. Alert Badge and Dot logic
+      // Note: Gemini API is optional and never triggers missing banner!
+      let isMissing = false;
+      if (provider === 'github') {
+        isMissing = !cfg.githubToken;
+      } else if (provider === 'gitlab') {
+        isMissing = !cfg.gitlabToken || !cfg.gitlabUrl || !cfg.gitlabProjectId;
+      } else {
+        isMissing = false; // local mode has no missing requirements
+      }
+
       const banner = document.getElementById('setupBanner');
       const dot = document.getElementById('settingsAlertDot');
       if (isMissing) {
@@ -1515,9 +1847,15 @@
 
     // Connection Test
     async function runConnectionTest() {
-      const token = document.getElementById('inputGithubToken').value.trim();
-      const owner = document.getElementById('inputGithubOwner').value.trim();
-      const repo = document.getElementById('inputGithubRepo').value.trim();
+      const provider = selectedSettingsProvider;
+      const ghToken = document.getElementById('inputGithubToken').value.trim();
+      const ghOwner = document.getElementById('inputGithubOwner').value.trim();
+      const ghRepo = document.getElementById('inputGithubRepo').value.trim();
+
+      const glUrl = document.getElementById('inputGitlabUrl').value.trim();
+      const glProjectId = document.getElementById('inputGitlabProjectId').value.trim();
+      const glToken = document.getElementById('inputGitlabToken').value.trim();
+
       const apiKey = document.getElementById('inputGeminiApiKey').value.trim();
       const model = document.getElementById('selectGeminiModel').value;
 
@@ -1527,34 +1865,62 @@
       resultBox.innerHTML = '<div class="flex items-center gap-1.5"><i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> 接続テスト中...</div>';
       lucide.createIcons();
 
-      let githubSuccess = false;
-      let geminiSuccess = false;
+      let gitSuccess = false;
       let details = [];
 
-      // Test GitHub
-      if (token) {
-        try {
-          const res = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Accept': 'application/vnd.github.v3+json'
+      // Test Git Provider
+      if (provider === 'local') {
+        gitSuccess = true;
+        details.push(`💾 ローカル保存モード: クラウド接続テスト不要（ブラウザ内に完全保存されます）`);
+      } else if (provider === 'gitlab') {
+        if (glUrl && glProjectId && glToken) {
+          try {
+            const baseUrl = normalizeGitLabBaseUrl(glUrl);
+            const encodedId = encodeProjectId(glProjectId);
+            const res = await fetch(`${baseUrl}/projects/${encodedId}`, {
+              headers: {
+                'PRIVATE-TOKEN': glToken
+              }
+            });
+            if (res.ok) {
+              gitSuccess = true;
+              const data = await res.json();
+              details.push(`✅ GitLab: 接続成功 (${data.name_with_namespace || data.name}, 可視性: ${data.visibility || 'OK'})`);
+            } else {
+              details.push(`❌ GitLab: 失敗 (Status ${res.status}: ${res.statusText})`);
             }
-          });
-          if (res.ok) {
-            githubSuccess = true;
-            const data = await res.json();
-            details.push(`✅ GitHub: 接続成功 (${data.full_name}, ${data.private ? 'Private' : 'Public'})`);
-          } else {
-            details.push(`❌ GitHub: 失敗 (Status ${res.status})`);
+          } catch (e) {
+            details.push(`❌ GitLab: 通信エラー (${e.message})`);
           }
-        } catch (e) {
-          details.push(`❌ GitHub: 通信エラー (${e.message})`);
+        } else {
+          details.push(`⚠️ GitLab URL、Project ID、PAT をすべて入力してください`);
         }
       } else {
-        details.push(`⚠️ GitHub Token 未入力`);
+        // github
+        if (ghToken) {
+          try {
+            const res = await fetch(`https://api.github.com/repos/${ghOwner}/${ghRepo}`, {
+              headers: {
+                'Authorization': `Bearer ${ghToken}`,
+                'Accept': 'application/vnd.github.v3+json'
+              }
+            });
+            if (res.ok) {
+              gitSuccess = true;
+              const data = await res.json();
+              details.push(`✅ GitHub: 接続成功 (${data.full_name}, ${data.private ? 'Private' : 'Public'})`);
+            } else {
+              details.push(`❌ GitHub: 失敗 (Status ${res.status})`);
+            }
+          } catch (e) {
+            details.push(`❌ GitHub: 通信エラー (${e.message})`);
+          }
+        } else {
+          details.push(`⚠️ GitHub Token 未入力`);
+        }
       }
 
-      // Test Gemini
+      // Test Gemini (Optional)
       if (apiKey) {
         try {
           const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
@@ -1565,7 +1931,6 @@
             })
           });
           if (res.ok) {
-            geminiSuccess = true;
             details.push(`✅ Gemini API: 接続成功 (${model})`);
           } else {
             details.push(`❌ Gemini API: 失敗 (Status ${res.status})`);
@@ -1574,11 +1939,10 @@
           details.push(`❌ Gemini API: 通信エラー (${e.message})`);
         }
       } else {
-        details.push(`⚠️ Gemini API Key 未入力`);
+        details.push(`ℹ️ Gemini API: 未設定 (会社環境/文字起こしスキップ・手動メモ・音声保存に対応)`);
       }
 
-      const allOk = githubSuccess && geminiSuccess;
-      resultBox.className = `p-3 rounded-xl text-[11px] border ${allOk ? 'bg-emerald-950/40 border-emerald-800 text-emerald-300' : 'bg-zinc-950 border-zinc-800 text-zinc-300'}`;
+      resultBox.className = `p-3 rounded-xl text-[11px] border ${gitSuccess ? 'bg-emerald-950/40 border-emerald-800 text-emerald-300' : 'bg-zinc-950 border-zinc-800 text-zinc-300'}`;
       resultBox.innerHTML = details.join('<br>');
     }
 
@@ -1964,21 +2328,31 @@
         updateScreenshotCountBadge();
 
         if (currentMeetingFolder) {
-          try {
-            const base64 = await blobToBase64(blob);
-            const filePath = `00_Inbox/Meetings/${currentMeetingFolder}/images/${filename}`;
-            await commitBinaryFileToGitHub(
-              filePath,
-              base64,
-              `feat(meeting): screenshot ${hms} (${triggerType})`
-            );
-            record.status = 'saved';
-            updateScreenshotItemUI(record.id, 'saved');
-          } catch (err) {
-            console.error('Failed to commit screenshot:', err);
-            record.status = 'error';
-            updateScreenshotItemUI(record.id, 'error');
-            showToast(`スクショ保存エラー (${filename}): ${err.message}`, 'error');
+          const cfg = getConfig();
+          const provider = cfg.gitProvider || 'github';
+          const hasCreds = (provider === 'github' && cfg.githubToken) || (provider === 'gitlab' && cfg.gitlabToken && cfg.gitlabUrl && cfg.gitlabProjectId);
+
+          if (provider === 'local' || !hasCreds) {
+            // Local retention mode: keep safely in memory/gallery
+            record.status = 'local';
+            updateScreenshotItemUI(record.id, 'local');
+          } else {
+            try {
+              const base64 = await blobToBase64(blob);
+              const filePath = `00_Inbox/Meetings/${currentMeetingFolder}/images/${filename}`;
+              await commitBinaryFile(
+                filePath,
+                base64,
+                `feat(meeting): screenshot ${hms} (${triggerType})`
+              );
+              record.status = 'saved';
+              updateScreenshotItemUI(record.id, 'saved');
+            } catch (err) {
+              console.error('Failed to commit screenshot:', err);
+              record.status = 'error';
+              updateScreenshotItemUI(record.id, 'error');
+              showToast(`スクショ保存エラー (${filename}): ${err.message}`, 'error');
+            }
           }
         }
       }, 'image/jpeg', 0.85);
@@ -2011,7 +2385,7 @@
             ${typeBadge}
             <span class="truncate font-mono text-zinc-400">${record.filename}</span>
           </div>
-          <span id="status_${record.id}" class="shrink-0 text-amber-400 font-medium">☁️ 送信中</span>
+          <span id="status_${record.id}" class="shrink-0 text-amber-400 font-medium">☁️ 処理中</span>
         </div>
       `;
 
@@ -2025,6 +2399,9 @@
       if (status === 'saved') {
         statusEl.innerText = '✅ 保存済';
         statusEl.className = 'shrink-0 text-emerald-400 font-medium';
+      } else if (status === 'local') {
+        statusEl.innerText = '💾 ローカル';
+        statusEl.className = 'shrink-0 text-cyan-400 font-medium';
       } else if (status === 'error') {
         statusEl.innerText = '⚠️ エラー';
         statusEl.className = 'shrink-0 text-red-400 font-medium';
@@ -2107,12 +2484,8 @@
         if (!ok) return;
       }
 
+      // Note: Git Token is optional! Meeting recorder works in full local-only mode.
       const cfg = getConfig();
-      if (!cfg.githubToken) {
-        openSettings();
-        showToast('GitHub PAT を設定してください', 'error');
-        return;
-      }
 
       try {
         const micStream = await navigator.mediaDevices.getUserMedia({
@@ -2228,26 +2601,37 @@
         const mp3Blob = encodeAudioBufferToMp3(audioBuf, 128);
         meetingLastMp3Blob = mp3Blob;
 
-        // 3. GitHubへ MP3 アップロード
-        processingMsg.innerText = 'GitHubへMP3音声を保存中...';
-        const mp3Base64 = await blobToBase64(mp3Blob);
-        const mp3Path = `00_Inbox/Meetings/${currentMeetingFolder}/meeting_audio.mp3`;
-        await commitBinaryFileToGitHub(
-          mp3Path,
-          mp3Base64,
-          `feat(meeting): meeting audio mp3 (${currentMeetingFolder})`
-        );
-
-        // 4. GitHubへ 会議README.md 生成＆アップロード
-        processingMsg.innerText = '会議サマリー（README.md）を生成中...';
+        // 3. 会議Markdown 生成
         const readmeContent = generateMeetingMarkdown(currentMeetingFolder, durationSeconds, meetingScreenshots);
-        const readmeBase64 = utf8ToBase64(readmeContent);
-        const readmePath = `00_Inbox/Meetings/${currentMeetingFolder}/README.md`;
-        await commitBinaryFileToGitHub(
-          readmePath,
-          readmeBase64,
-          `docs(meeting): meeting summary & screenshots (${currentMeetingFolder})`
-        );
+        meetingLastReadmeContent = readmeContent;
+
+        const cfg = getConfig();
+        const provider = cfg.gitProvider || 'github';
+        const hasGitCredentials = (provider === 'github' && cfg.githubToken) || (provider === 'gitlab' && cfg.gitlabToken && cfg.gitlabUrl && cfg.gitlabProjectId);
+
+        // 4. Git保存（Credentialsがあり、Localモードでない場合）
+        if (hasGitCredentials && provider !== 'local') {
+          const providerLabel = provider === 'gitlab' ? 'GitLab' : 'GitHub';
+          processingMsg.innerText = `${providerLabel}へMP3音声を保存中...`;
+          const mp3Base64 = await blobToBase64(mp3Blob);
+          const mp3Path = `00_Inbox/Meetings/${currentMeetingFolder}/meeting_audio.mp3`;
+          await commitBinaryFile(
+            mp3Path,
+            mp3Base64,
+            `feat(meeting): meeting audio mp3 (${currentMeetingFolder})`
+          );
+
+          processingMsg.innerText = '会議サマリー（README.md）を生成中...';
+          const readmeBase64 = utf8ToBase64(readmeContent);
+          const readmePath = `00_Inbox/Meetings/${currentMeetingFolder}/README.md`;
+          await commitBinaryFile(
+            readmePath,
+            readmeBase64,
+            `docs(meeting): meeting summary & screenshots (${currentMeetingFolder})`
+          );
+        } else {
+          processingMsg.innerText = 'ローカル保存の準備完了！';
+        }
 
         // 5. 完了UI表示
         processingCard.classList.add('hidden');
@@ -2256,10 +2640,33 @@
         document.getElementById('statDuration').innerText = formatSecondsToTimer(durationSeconds);
         document.getElementById('statScreenshots').innerText = `${meetingScreenshots.length} 枚 (JPEG)`;
 
-        const cfg = getConfig();
-        document.getElementById('linkGitHubFolder').href = `https://github.com/${cfg.githubOwner}/${cfg.githubRepo}/tree/${cfg.githubBranch || 'main'}/00_Inbox/Meetings/${currentMeetingFolder}`;
+        // 6. リポジトリリンク設定
+        const repoLinkRow = document.getElementById('repoLinkRow');
+        const linkFolder = document.getElementById('linkGitHubFolder');
+        const linkIcon = document.getElementById('linkRepoIcon');
+        const linkLabel = document.getElementById('linkRepoLabel');
 
-        showToast('会議記録の全データ（MP3 & JPEG & ノート）を保存しました！', 'success');
+        if (hasGitCredentials && provider === 'github') {
+          if (repoLinkRow) repoLinkRow.classList.remove('hidden');
+          if (linkFolder) linkFolder.href = `https://github.com/${cfg.githubOwner}/${cfg.githubRepo}/tree/${cfg.githubBranch || 'main'}/00_Inbox/Meetings/${currentMeetingFolder}`;
+          if (linkIcon) linkIcon.setAttribute('data-lucide', 'github');
+          if (linkLabel) linkLabel.innerText = 'GitHubで会議フォルダを開く';
+        } else if (hasGitCredentials && provider === 'gitlab') {
+          if (repoLinkRow) repoLinkRow.classList.remove('hidden');
+          const cleanBase = normalizeGitLabBaseUrl(cfg.gitlabUrl).replace(/\/api\/v4\/?$/, '');
+          if (linkFolder) linkFolder.href = `${cleanBase}/${cfg.gitlabProjectId}/-/tree/${cfg.gitlabBranch || 'main'}/00_Inbox/Meetings/${currentMeetingFolder}`;
+          if (linkIcon) linkIcon.setAttribute('data-lucide', 'git-branch');
+          if (linkLabel) linkLabel.innerText = 'GitLabで会議フォルダを開く';
+        } else {
+          if (repoLinkRow) repoLinkRow.classList.add('hidden');
+        }
+        lucide.createIcons();
+
+        if (hasGitCredentials && provider !== 'local') {
+          showToast('会議記録の全データ（MP3 & JPEG & ノート）を保存しました！', 'success');
+        } else {
+          showToast('会議記録が完了しました！ZIPまたはMP3で手元に保存できます', 'success');
+        }
 
       } catch (err) {
         console.error('Error saving meeting:', err);
@@ -2287,6 +2694,76 @@
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       showToast('MP3をダウンロードしました（NotebookLM等へ投入可能）', 'success');
+    }
+
+    function downloadLastMeetingReadme() {
+      if (!meetingLastReadmeContent) {
+        showToast('保存可能な議事録ノートがありません', 'error');
+        return;
+      }
+      const filename = `${currentMeetingFolder || 'meeting'}_README.md`;
+      const blob = new Blob([meetingLastReadmeContent], { type: 'text/markdown;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('議事録 (README.md) をダウンロードしました', 'success');
+    }
+
+    async function downloadLastMeetingZip() {
+      if (typeof JSZip === 'undefined') {
+        showToast('ZIP作成ライブラリの読み込みに失敗しました', 'error');
+        return;
+      }
+      if (!meetingLastMp3Blob && meetingScreenshots.length === 0 && !meetingLastReadmeContent) {
+        showToast('保存対象のデータがありません', 'error');
+        return;
+      }
+
+      showToast('📦 会議一式をZIP圧縮中...', 'info');
+
+      try {
+        const zip = new JSZip();
+        const folderName = currentMeetingFolder || `meeting_${Date.now()}`;
+        const root = zip.folder(folderName);
+
+        // 1. MP3
+        if (meetingLastMp3Blob) {
+          root.file('meeting_audio.mp3', meetingLastMp3Blob);
+        }
+
+        // 2. README.md
+        if (meetingLastReadmeContent) {
+          root.file('README.md', meetingLastReadmeContent);
+        }
+
+        // 3. images/
+        const imgFolder = root.folder('images');
+        for (const sc of meetingScreenshots) {
+          if (sc.blob) {
+            imgFolder.file(sc.filename, sc.blob);
+          }
+        }
+
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+        const url = URL.createObjectURL(zipBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${folderName}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        showToast(`会議一式（${meetingScreenshots.length}枚スクショ + MP3 + MD）をZIP保存しました！`, 'success');
+      } catch (e) {
+        console.error('ZIP generation error:', e);
+        showToast(`ZIP作成エラー: ${e.message}`, 'error');
+      }
     }
 
     // Event Listeners
@@ -2381,13 +2858,23 @@
         }
       });
 
+      // Provider Tabs in Settings
+      document.getElementById('providerBtnGithub').addEventListener('click', () => setSettingsProviderTab('github'));
+      document.getElementById('providerBtnGitlab').addEventListener('click', () => setSettingsProviderTab('gitlab'));
+      document.getElementById('providerBtnLocal').addEventListener('click', () => setSettingsProviderTab('local'));
+
       // Settings Save
       document.getElementById('saveSettingsBtn').addEventListener('click', () => {
         saveConfig({
+          gitProvider: selectedSettingsProvider,
           githubToken: document.getElementById('inputGithubToken').value.trim(),
           githubOwner: document.getElementById('inputGithubOwner').value.trim() || 'hatomachi',
           githubRepo: document.getElementById('inputGithubRepo').value.trim() || 'personal-vault',
           githubBranch: document.getElementById('inputGithubBranch').value.trim() || 'main',
+          gitlabUrl: document.getElementById('inputGitlabUrl').value.trim(),
+          gitlabProjectId: document.getElementById('inputGitlabProjectId').value.trim(),
+          gitlabBranch: document.getElementById('inputGitlabBranch').value.trim() || 'main',
+          gitlabToken: document.getElementById('inputGitlabToken').value.trim(),
           geminiApiKey: document.getElementById('inputGeminiApiKey').value.trim(),
           geminiModel: document.getElementById('selectGeminiModel').value
         });
@@ -2401,6 +2888,10 @@
       // Password visibility toggles
       document.getElementById('toggleTokenVisibility').addEventListener('click', () => {
         const inp = document.getElementById('inputGithubToken');
+        inp.type = inp.type === 'password' ? 'text' : 'password';
+      });
+      document.getElementById('toggleGitlabTokenVisibility').addEventListener('click', () => {
+        const inp = document.getElementById('inputGitlabToken');
         inp.type = inp.type === 'password' ? 'text' : 'password';
       });
       document.getElementById('toggleGeminiKeyVisibility').addEventListener('click', () => {
@@ -2417,7 +2908,9 @@
       document.getElementById('btnChangeScreen').addEventListener('click', selectScreenCapture);
       document.getElementById('btnToggleMeeting').addEventListener('click', toggleMeetingRecording);
       document.getElementById('btnManualCapture').addEventListener('click', () => takeMeetingScreenshot('manual'));
+      document.getElementById('btnDownloadZip').addEventListener('click', downloadLastMeetingZip);
       document.getElementById('btnDownloadMp3').addEventListener('click', downloadLastMeetingMp3);
+      document.getElementById('btnDownloadReadme').addEventListener('click', downloadLastMeetingReadme);
       document.getElementById('btnDismissMeetingSuccess').addEventListener('click', () => {
         document.getElementById('meetingSuccessCard').classList.add('hidden');
       });

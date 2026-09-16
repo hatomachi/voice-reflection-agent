@@ -82,20 +82,23 @@ launchctl unload ~/Library/LaunchAgents/com.user.voice-reflection.plist
 
 ---
 
-## 📱 iPhone側クライアント（Cloudflare Pages PWA）
+## 📱 iPhone / PC クライアント（Cloudflare Pages PWA）
 
-iPhoneでの快適な夜間セルフリフレクションを実現するため、**完全サーバーレスのPWA（`web/index.html`）** を同梱しています。
+iPhoneでの夜間セルフリフレクションおよびPCでの会議・画面記録を快適に行うため、**完全サーバーレスのPWA（`web/index.html`）** を同梱しています。
 
 ### 🌟 PWAの主な機能
-1. **Screen Wake Lock（画面スリープ防止）**:
+1. **GitHub ＆ 社内 GitLab バックエンド対応**:
+   - `webapp-obsidian` や `obsidian-todo-calendar` と同様、GitHub のみならず社内 GitLab（ALB/リバースプロキシ対応、Project ID、PAT）およびローカル保存モードに対応。
+2. **Gemini API のオプショナル化（会社環境対応）**:
+   - 会社環境など Gemini API が利用できない場合でも、文字起こしをスキップして手動メモやローカル音声保存で快適に利用可能（将来の社内ホストWhisper連携にも道を開く設計）。
+3. **PC向け会議・画面記録 ＆ 完全ローカル保存（ZIP一括）モード**:
+   - 画面キャプチャ（複数モニタ対応）、スライド変化自動検知JPEGスクショ、ブラウザ内LAME MP3エンコード（NotebookLM直行可能）。
+   - Git連携なしでも利用可能で、会議終了後に **「📦 会議一式をまとめて保存 (ZIP)」（MP3 + スクショJPEG群 + 議事録Markdown）** や MP3、README.md を手元PCにワンクリックで完全保存可能。
+4. **Screen Wake Lock（画面スリープ防止）**:
    - 録音開始と同時に自動で画面スリープを防止。夜間に数分〜十数分語り続けても画面が暗転・中断しません。
-2. **リアルタイム音量ビジュアライザー**:
+5. **リアルタイム音量ビジュアライザー**:
    - Web Audio API により、ベッドサイドの小声でもマイクが拾えているかを波形・インジケーターで視覚化。
-3. **Gemini Flash による高速・忠実な文字起こし**:
-   - Google AI Studio の `gemini-2.0-flash`（または `gemini-1.5-flash`）に音声を送信し、自然な相槌・言い淀みを残したまま高精度にテキスト化。
-4. **GitHub Queue への Direct Commit**:
-   - `hatomachi/personal-vault` の `00_Inbox/queue/YYYY-MM-DD-HHmmss.json` へ直接コミット。
-5. **完全サーバーレス＆高セキュリティ**:
+6. **完全サーバーレス＆高セキュリティ**:
    - PAT や API Key はすべて端末の `localStorage` にのみ保存され、外部の中継サーバーは一切不要。
 
 ### ☁️ Cloudflare Pages デプロイ手順（3分で完了）
@@ -107,15 +110,14 @@ iPhoneでの快適な夜間セルフリフレクションを実現するため�
    - **Build output directory**: `web`
 4. **Save and Deploy** をクリック ➡ 数秒で公開完了！
 
-### 📲 iPhoneでのホーム画面追加
-1. iPhone Safari でデプロイされた URL を開く
-2. 共有ボタン（四角から上矢印）をタップ ➡ **「ホーム画面に追加」**
-3. ホーム画面から起動すると、アドレスバーのない全画面ネイティブアプリ（standalone）として動作します。
-4. 初回起動時に右上の ⚙️ 設定から以下を入力：
-   - **GitHub PAT**: `Contents: Read and write` 権限を持つトークン
-   - **Owner / Repo**: `hatomachi` / `personal-vault`
-   - **Gemini API Key**: [Google AI Studio](https://aistudio.google.com/) で取得したキー
-5. 「接続テスト」を押して疎通を確認し、「保存する」をタップすれば準備完了！
+### 📲 初期設定
+1. ブラウザまたはホーム画面追加アプリから起動
+2. 右上の ⚙️ 設定から以下を選択・入力：
+   - **保存先バックエンド**: `GitHub`、`社内 GitLab`、または `ローカルのみ`
+   - **GitHub**: Token、Owner、Repository、Branch
+   - **社内 GitLab**: Base URL、Project ID、Token、Branch
+   - **Gemini API Key (任意)**: 個人利用時は [Google AI Studio](https://aistudio.google.com/) のキーを設定。会社環境では空欄でOK。
+3. 「接続テスト」を押して疎通を確認し、「設定を保存」をタップすれば準備完了！
 
 ---
 
