@@ -2195,6 +2195,13 @@
       return `${minutes}分${seconds}秒`;
     }
 
+    function formatTimeHMS(date = new Date()) {
+      const hh = String(date.getHours()).padStart(2, '0');
+      const mi = String(date.getMinutes()).padStart(2, '0');
+      const ss = String(date.getSeconds()).padStart(2, '0');
+      return `${hh}:${mi}:${ss}`;
+    }
+
     function startMeetingAudioMeter(analyser) {
       meetingAnalyserNode = analyser;
       const dataArray = new Uint8Array(analyser.frequencyBinCount);
