@@ -153,6 +153,10 @@ voice-reflection-agent/
    - Web Audio API（`AnalyserNode`、`fftSize: 32`）を活用したCPU負荷0.1%未満の超軽量波形モニターを実装。
    - マイク（自分・緑系）とスピーカー（相手/PC音・シアン系）を完全独立させ、それぞれの周波数帯域（低音〜高音の5バンド）に応じたリアルタイムEQ波形アニメーションを描画。
    - 画面共有時の「システム音声つけ忘れ」を確実にゼロにする4重ガード（①最新 `systemAudio: 'include'` ヒント指定、②画面選択前のビジュアル事前ガイド、③選択直後の即時リカバリーモーダル「🔁 チェックを入れて選び直す」、④会議開始ボタンのインターロック二重防壁）を実装。会議後に「相手の声が入っていなかった」という痛恨の事故を物理的に防止。
-
-
-
+9. **[x] Step 9: Goベース Windows/Mac ネイティブ対応（ポータブル単一exe化 ＋ ローカルClaude連携 ＋ ローカルフォルダ直接保存）**:
+   - `portable-ssh-ftp` で確立した Pure Go 単一バイナリ設計（Macクロスコンパイル、CGO不要、サイズ約7.0MB）を適用。
+   - `go:embed` でWebフロントエンド資産一式を内包し、ダブルクリックで自動的にローカルHTTPサーバー起動＆Edge/Chromeブラウザオープン。
+   - **ローカル `claude` CLI 連携 (`/api/ai/claude`, `/api/ai/reflection`, `/api/ai/meeting-summary`)**: 社内PCや閉域環境で外部Gemini APIが使えない場合でも、ローカルPCに導入されたClaude CLI（Claude Code headless等）を直接実行し、高精度な議事録要約・7つの習慣リフレクションを即座に生成。
+   - **ローカルフォルダ直接一括保存 (`/api/save/meeting`) ＆ フォルダ即時起動 (`/api/open-folder`)**: 会議終了後、ZIPダウンロード不要でローカルフォルダに直接MP3・スクショ画像群・README.mdを書き出し、ワンクリックでエクスプローラー/Finder起動。
+   - **セルフリフレクションのローカルVault直書き (`/api/save/reflection`)**: `personal-vault` を自動検知し、ワンクリックで `00_Inbox/Reflections/YYYY-MM-DD.md` に直接保存。
+   - **PWAとNativeのハイブリッドUI**: 既存のスマホ（iOS PWA / Cloudflare Pages）運用を一切壊さず、exe経由で起動した時のみ「🟢 Native」バッジが点灯しネイティブ機能がフル解放される自動検知設計。

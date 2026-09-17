@@ -121,6 +121,37 @@ iPhoneでの夜間セルフリフレクションおよびPCでの会議・画面
 
 ---
 
+## 🖥️ ポータブル単一exe / Native Engine（Windows & Mac）
+
+`portable-ssh-ftp` と同様、**インストール不要・管理者権限不要のPure Go単一バイナリ（サイズ約7.0MB）** として動作します。
+
+### 🌟 Native Engine でできること
+1. **ローカル `claude` CLI 連携**:
+   - 外部Gemini APIが使えない社内閉域PCでも、ローカルPC内の `claude`（Claude Code headless 等）をワンクリックで実行。
+   - 会議議事録の要約（決定事項・ToDo抽出）や、7つの習慣深層リフレクションを即座に生成。
+2. **ローカルフォルダ直接一括保存**:
+   - 会議終了後、ZIPダウンロードの手間なくローカルフォルダ（`data/meetings/YYYY-MM-DD_HHmmss/` 等）へ MP3・スクショJPEG群・README.md を直接書き出し。
+   - ワンクリックでエクスプローラー／Finderを起動。
+3. **セルフリフレクションのローカルVault直書き**:
+   - `personal-vault` を自動検知し、`00_Inbox/Reflections/YYYY-MM-DD.md` に直接保存。
+
+### 🚀 ビルド＆起動手順（Mac上で完結）
+
+```bash
+# Macローカルでの即時実行（自動でブラウザが開きます）
+make run
+
+# Windows向けポータブル単一exeのクロスコンパイル（CGO不要）
+make build-windows
+# ➡ bin/voice-reflection-agent.exe (約7.0MB) が生成されます
+
+# Mac向けバイナリビルド
+make build
+# ➡ bin/voice-reflection-agent が生成されます
+```
+
+---
+
 ## 📥 キューファイル形式（JSON）
 
 `personal-vault` リポジトリの `00_Inbox/queue/YYYY-MM-DD-HHmmss.json` にコミットされます。

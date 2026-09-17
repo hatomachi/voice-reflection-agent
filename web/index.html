@@ -95,6 +95,10 @@
         <h1 class="text-sm font-semibold tracking-wide flex items-center gap-1.5 text-zinc-100">
           Voice Reflection
           <span class="text-[10px] font-normal px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">PWA</span>
+          <span id="nativeBadge" class="hidden text-[10px] font-medium px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1 cursor-default" title="Go Native Engine 稼働中 (ローカルClaude・直接保存連携)">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span>Native</span>
+          </span>
         </h1>
       </div>
     </div>
@@ -317,6 +321,37 @@
           </button>
           <button id="commitBtn" class="flex-[2] py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-zinc-950 text-xs font-semibold shadow-lg shadow-emerald-950/40 active:scale-98 transition flex items-center justify-center gap-1.5">
             <i data-lucide="send" class="w-4 h-4"></i> <span id="commitBtnLabel">キュー送信（GitHub）</span>
+          </button>
+        </div>
+
+        <!-- Native Claude Instant Reflection Button (Shown when Native Mode is active) -->
+        <div id="nativeReflectionRow" class="hidden pt-2 border-t border-zinc-800/80">
+          <button id="btnNativeGenerateReflection" type="button" class="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-semibold shadow-md active:scale-98 transition flex items-center justify-center gap-2">
+            <i data-lucide="sparkles" class="w-4 h-4 text-purple-200"></i>
+            <span>🧠 ローカルClaudeでリフレクション即時生成（Vault直書き）</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Native Claude Reflection Result Card -->
+      <div id="nativeReflectionResultCard" class="hidden bg-zinc-900/95 rounded-2xl p-4 border border-purple-500/40 shadow-2xl space-y-3">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <i data-lucide="brain-circuit" class="w-4 h-4 text-purple-400"></i>
+            <h4 class="text-xs font-semibold text-purple-200">Claude 深層リフレクション生成結果</h4>
+          </div>
+          <span id="nativeReflectionSavedBadge" class="hidden text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Vault保存完了</span>
+        </div>
+
+        <div id="nativeReflectionPreview" class="p-3.5 rounded-xl bg-zinc-950 border border-zinc-800 text-[11px] font-mono leading-relaxed text-zinc-200 max-h-80 overflow-y-auto whitespace-pre-wrap select-text"></div>
+
+        <div class="flex items-center gap-2 pt-1">
+          <button id="btnNativeSaveReflection" type="button" class="flex-1 py-2 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-semibold transition flex items-center justify-center gap-1.5 shadow-md">
+            <i data-lucide="save" class="w-4 h-4"></i>
+            <span>Vault (00_Inbox) に保存</span>
+          </button>
+          <button id="btnNativeFinishReflection" type="button" class="py-2 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium transition">
+            閉じる
           </button>
         </div>
       </div>
@@ -585,6 +620,54 @@
             <span id="linkRepoLabel">リポジトリで会議フォルダを開く</span>
           </a>
         </div>
+
+        <!-- Native Direct Local Save Row (Visible in Native Mode) -->
+        <div id="nativeDirectSaveRow" class="hidden pt-2 border-t border-zinc-800/80">
+          <div class="p-3.5 rounded-xl bg-emerald-950/30 border border-emerald-500/30 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div class="flex items-center gap-2.5 w-full sm:w-auto">
+              <div class="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                <i data-lucide="hard-drive" class="w-4 h-4"></i>
+              </div>
+              <div class="min-w-0">
+                <div class="text-xs font-semibold text-emerald-300 flex items-center gap-1.5">
+                  <span>PCローカル直接保存</span>
+                  <span class="text-[9px] font-mono px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Native Engine</span>
+                </div>
+                <div id="nativeSavePathText" class="text-[10px] text-zinc-400 font-mono mt-0.5 truncate max-w-xs sm:max-w-sm">data/meetings/...</div>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
+              <button id="btnNativeSaveMeeting" type="button" class="flex-1 sm:flex-initial py-2 px-3.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-bold shadow-md active:scale-98 transition flex items-center justify-center gap-1.5">
+                <i data-lucide="save" class="w-4 h-4"></i>
+                <span>PCに一括保存 (1秒)</span>
+              </button>
+              <button id="btnNativeOpenFolder" type="button" class="hidden py-2 px-3 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-emerald-300 text-xs font-medium border border-emerald-500/30 transition flex items-center justify-center gap-1.5">
+                <i data-lucide="folder-open" class="w-4 h-4"></i>
+                <span>フォルダを開く</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Native Claude Meeting Summary Section (Visible in Native Mode) -->
+        <div id="nativeClaudeMeetingSummarySection" class="hidden pt-2">
+          <div class="p-3.5 rounded-xl bg-purple-950/20 border border-purple-500/30 space-y-2.5">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <i data-lucide="brain-circuit" class="w-4 h-4 text-purple-400"></i>
+                <span class="text-xs font-semibold text-purple-200">Claude 議事録要約（決定事項・ToDo抽出）</span>
+              </div>
+              <button id="btnNativeClaudeSummary" type="button" class="py-1.5 px-3 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-[11px] font-semibold transition flex items-center gap-1.5 shadow">
+                <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+                <span>要約を生成</span>
+              </button>
+            </div>
+            <div id="nativeClaudeSummaryLoading" class="hidden py-3 text-center text-xs text-purple-300 animate-pulse">
+              <span>🧠 ローカルClaudeが会議を分析・要約中...（約10〜30秒）</span>
+            </div>
+            <div id="nativeClaudeSummaryResultBox" class="hidden p-3 rounded-lg bg-zinc-950 border border-zinc-800 text-[11px] font-mono text-zinc-300 max-h-48 overflow-y-auto whitespace-pre-wrap select-text"></div>
+          </div>
+        </div>
       </div>
 
       <!-- Screenshot Timeline & Live Gallery -->
@@ -762,6 +845,28 @@
           </div>
         </div>
 
+        <!-- Native Engine Configuration (Shown when Native Mode is active) -->
+        <div id="nativeConfigGroup" class="hidden p-3.5 rounded-2xl bg-zinc-950/80 border border-emerald-500/30 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-emerald-400 flex items-center gap-1.5">
+              <i data-lucide="cpu" class="w-3.5 h-3.5 text-emerald-400"></i> Go Native Engine 設定
+            </span>
+            <span id="nativeClaudeStatusBadge" class="text-[9px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Claude検出中</span>
+          </div>
+
+          <div>
+            <label class="block text-[11px] text-zinc-400 mb-1">Claude CLI コマンド名</label>
+            <input type="text" id="inputNativeClaudeCmd" placeholder="claude" class="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-zinc-200 focus:outline-none focus:border-emerald-500 font-mono text-[11px]">
+            <p class="text-[10px] text-zinc-500 mt-1">※ 社内Claude CodeやローカルAIの実行コマンド名（デフォルト: claude）</p>
+          </div>
+
+          <div>
+            <label class="block text-[11px] text-zinc-400 mb-1">会議データのローカル保存先フォルダ</label>
+            <input type="text" id="inputNativeSaveDir" placeholder="data/meetings" class="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-zinc-200 focus:outline-none focus:border-emerald-500 font-mono text-[11px]">
+            <p class="text-[10px] text-zinc-500 mt-1">※ PC上の絶対パスまたは相対パス（デフォルト: data/meetings）</p>
+          </div>
+        </div>
+
         <!-- Connection Test Result -->
         <div id="testResultBox" class="hidden p-3 rounded-xl text-[11px]"></div>
       </div>
@@ -878,6 +983,12 @@
     let prevFrameData = null;
     let lastCaptureTime = 0;
     const MIN_CAPTURE_INTERVAL_MS = 5000; // スクショ連打防止（最低5秒間隔）
+
+    // Native Go Engine State Variables
+    let isNativeMode = false;
+    let nativeInfo = null;
+    let lastSavedNativeMeetingPath = null;
+    let lastGeneratedReflectionMarkdown = '';
 
     // Config & Storage Keys
     const CONFIG_KEY = 'voice_reflection_config_v1';
@@ -3240,11 +3351,360 @@
       }
     }
 
+    // ==========================================
+    // Native Go Engine Integration Functions
+    // ==========================================
+
+    async function checkNativeMode() {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2000);
+        const res = await fetch('/api/health', { signal: controller.signal });
+        clearTimeout(timeoutId);
+
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data && data.native) {
+          isNativeMode = true;
+          nativeInfo = data;
+          console.log('🟢 Native Go Engine connected:', data);
+
+          // 1. Show Native Badge
+          const badge = document.getElementById('nativeBadge');
+          if (badge) {
+            badge.classList.remove('hidden');
+            badge.title = `Go Native Engine (${data.os}/${data.arch})\nClaude CLI: ${data.claudeFound ? '利用可能 (' + data.claudePath + ')' : '未検出'}\n保存先: ${data.defaultSaveDir}`;
+          }
+
+          // 2. Show Native Direct Save Row in Meeting Card
+          const saveRow = document.getElementById('nativeDirectSaveRow');
+          if (saveRow) {
+            saveRow.classList.remove('hidden');
+            const savePathText = document.getElementById('nativeSavePathText');
+            if (savePathText) {
+              const fName = currentMeetingFolder || formatFolderName(new Date());
+              savePathText.innerText = `${data.defaultSaveDir}/${fName}`;
+            }
+          }
+
+          // 3. Show Claude Summary Section in Meeting Card
+          const claudeSection = document.getElementById('nativeClaudeMeetingSummarySection');
+          if (claudeSection) {
+            claudeSection.classList.remove('hidden');
+          }
+
+          // 4. Show Claude Reflection Button in Reflection Card
+          const reflRow = document.getElementById('nativeReflectionRow');
+          if (reflRow) {
+            reflRow.classList.remove('hidden');
+          }
+
+          // 5. Populate Native Settings in Modal
+          const nativeGroup = document.getElementById('nativeConfigGroup');
+          if (nativeGroup) {
+            nativeGroup.classList.remove('hidden');
+            const inpCmd = document.getElementById('inputNativeClaudeCmd');
+            const inpDir = document.getElementById('inputNativeSaveDir');
+            if (inpCmd && data.claudeCommand) inpCmd.value = data.claudeCommand;
+            if (inpDir && data.defaultSaveDir) inpDir.value = data.defaultSaveDir;
+
+            const statusBadge = document.getElementById('nativeClaudeStatusBadge');
+            if (statusBadge) {
+              if (data.claudeFound) {
+                statusBadge.innerText = 'Claude 連携可能';
+                statusBadge.className = 'text-[9px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
+              } else {
+                statusBadge.innerText = 'Claude 未検出';
+                statusBadge.className = 'text-[9px] font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30';
+              }
+            }
+          }
+
+          lucide.createIcons();
+        }
+      } catch (e) {
+        // Standalone Web/PWA mode, nothing to do
+        isNativeMode = false;
+        nativeInfo = null;
+      }
+    }
+
+    async function saveMeetingToNativeFolder() {
+      if (!isNativeMode) {
+        showToast('Native Engine が起動していません', 'error');
+        return;
+      }
+      if (!meetingLastMp3Blob && meetingScreenshots.length === 0 && !meetingLastReadmeContent) {
+        showToast('保存対象の会議データがありません', 'error');
+        return;
+      }
+
+      const btnSave = document.getElementById('btnNativeSaveMeeting');
+      const origHtml = btnSave ? btnSave.innerHTML : '';
+      if (btnSave) {
+        btnSave.disabled = true;
+        btnSave.innerHTML = '<span class="inline-block animate-spin mr-1">⏳</span><span>保存中...</span>';
+      }
+
+      showToast('📁 PCローカルフォルダに直接保存中...', 'info');
+
+      try {
+        const folderName = currentMeetingFolder || formatFolderName(new Date());
+
+        // MP3 Base64
+        let audioB64 = '';
+        if (meetingLastMp3Blob) {
+          audioB64 = await blobToBase64(meetingLastMp3Blob);
+        }
+
+        // Screenshots Base64
+        const imgList = [];
+        for (const sc of meetingScreenshots) {
+          if (sc.blob) {
+            const b64 = await blobToBase64(sc.blob);
+            imgList.push({ name: sc.filename, base64: b64 });
+          } else if (sc.dataUrl) {
+            imgList.push({ name: sc.filename, base64: sc.dataUrl });
+          }
+        }
+
+        const payload = {
+          dirName: folderName,
+          readmeContent: meetingLastReadmeContent || '',
+          audioBase64: audioB64,
+          audioFileName: 'meeting_audio.mp3',
+          images: imgList
+        };
+
+        const res = await fetch('/api/save/meeting', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        if (!data.success) {
+          throw new Error(data.error || '保存処理でエラーが発生しました');
+        }
+
+        lastSavedNativeMeetingPath = data.savedPath;
+
+        if (btnSave) {
+          btnSave.disabled = false;
+          btnSave.innerHTML = '<i data-lucide="check" class="w-4 h-4 text-emerald-300"></i><span>保存完了！</span>';
+        }
+
+        const btnOpen = document.getElementById('btnNativeOpenFolder');
+        if (btnOpen) {
+          btnOpen.classList.remove('hidden');
+        }
+
+        const savePathText = document.getElementById('nativeSavePathText');
+        if (savePathText && data.savedPath) {
+          savePathText.innerText = data.savedPath;
+        }
+
+        lucide.createIcons();
+        showToast(`PCローカルに全データ（${data.fileCount}ファイル）を保存しました！`, 'success');
+      } catch (err) {
+        console.error('Save to native error:', err);
+        if (btnSave) {
+          btnSave.disabled = false;
+          btnSave.innerHTML = origHtml;
+        }
+        showToast(`PC保存エラー: ${err.message}`, 'error');
+      }
+    }
+
+    async function openNativeMeetingFolder() {
+      if (!isNativeMode) return;
+      try {
+        const targetPath = lastSavedNativeMeetingPath || (nativeInfo ? nativeInfo.defaultSaveDir : '');
+        const res = await fetch('/api/open-folder', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: targetPath })
+        });
+        const data = await res.json();
+        if (!data.success) {
+          showToast(`フォルダオープン失敗: ${data.error}`, 'error');
+        } else {
+          showToast('フォルダを開きました', 'info');
+        }
+      } catch (err) {
+        showToast(`フォルダオープンエラー: ${err.message}`, 'error');
+      }
+    }
+
+    async function generateMeetingSummaryWithClaude() {
+      if (!isNativeMode) {
+        showToast('Native Engine が起動していません', 'error');
+        return;
+      }
+
+      const btnSummary = document.getElementById('btnNativeClaudeSummary');
+      const loader = document.getElementById('nativeClaudeSummaryLoading');
+      const resultBox = document.getElementById('nativeClaudeSummaryResultBox');
+
+      if (btnSummary) btnSummary.disabled = true;
+      if (loader) loader.classList.remove('hidden');
+      if (resultBox) resultBox.classList.add('hidden');
+
+      try {
+        const folderName = currentMeetingFolder || formatFolderName(new Date());
+        const durationText = document.getElementById('statDuration')?.innerText || '00:00:00';
+        const scCount = meetingScreenshots.length;
+
+        let content = meetingLastReadmeContent || '';
+
+        const payload = {
+          meetingId: folderName,
+          duration: durationText,
+          content: content,
+          screenshotCount: scCount
+        };
+
+        const res = await fetch('/api/ai/meeting-summary', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        if (!data.success) {
+          throw new Error(data.error || 'Claude要約の生成に失敗しました');
+        }
+
+        const summaryMarkdown = `\n---\n\n## 🧠 Claude 議事録サマリー\n\n${data.result}\n\n---\n`;
+        meetingLastReadmeContent = summaryMarkdown + (meetingLastReadmeContent || '');
+
+        if (resultBox) {
+          resultBox.innerText = data.result;
+          resultBox.classList.remove('hidden');
+        }
+
+        showToast('Claudeによる議事録要約が完了しました！', 'success');
+      } catch (err) {
+        console.error('Claude summary error:', err);
+        showToast(`Claude要約エラー: ${err.message}`, 'error');
+      } finally {
+        if (btnSummary) btnSummary.disabled = false;
+        if (loader) loader.classList.add('hidden');
+      }
+    }
+
+    async function generateReflectionWithClaude() {
+      if (!isNativeMode) {
+        showToast('Native Engine が起動していません', 'error');
+        return;
+      }
+
+      const rawText = document.getElementById('transcriptionInput')?.value?.trim() || '';
+      if (!rawText) {
+        showToast('文字起こしテキストまたはメモが入力されていません', 'error');
+        return;
+      }
+
+      const btnGen = document.getElementById('btnNativeGenerateReflection');
+      const origHtml = btnGen ? btnGen.innerHTML : '';
+      if (btnGen) {
+        btnGen.disabled = true;
+        btnGen.innerHTML = '<span class="inline-block animate-spin mr-1.5">⏳</span><span>🧠 Claude思考・リフレクション生成中...</span>';
+      }
+
+      showToast('🧠 ローカルClaudeが7つの習慣に基づき内省中...', 'info');
+
+      try {
+        const res = await fetch('/api/ai/reflection', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: rawText })
+        });
+
+        const data = await res.json();
+        if (!data.success) {
+          throw new Error(data.error || 'リフレクション生成に失敗しました');
+        }
+
+        lastGeneratedReflectionMarkdown = data.result;
+
+        // Auto save to Vault directly!
+        let savedDirectly = false;
+        try {
+          const saveRes = await fetch('/api/save/reflection', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              date: data.date,
+              content: data.result
+            })
+          });
+          const saveData = await saveRes.json();
+          if (saveData.success) {
+            savedDirectly = true;
+            console.log('Saved reflection to:', saveData.savedPath);
+          }
+        } catch (se) {
+          console.warn('Auto save reflection error:', se);
+        }
+
+        const resultCard = document.getElementById('nativeReflectionResultCard');
+        const preview = document.getElementById('nativeReflectionPreview');
+        const badge = document.getElementById('nativeReflectionSavedBadge');
+
+        if (preview) preview.innerText = data.result;
+        if (badge) {
+          if (savedDirectly) badge.classList.remove('hidden');
+          else badge.classList.add('hidden');
+        }
+        if (resultCard) resultCard.classList.remove('hidden');
+
+        lucide.createIcons();
+        showToast(savedDirectly ? 'Vault (00_Inbox/Reflections/) に保存完了！' : 'リフレクションを生成しました', 'success');
+      } catch (err) {
+        console.error('Claude reflection error:', err);
+        showToast(`Claude生成エラー: ${err.message}`, 'error');
+      } finally {
+        if (btnGen) {
+          btnGen.disabled = false;
+          btnGen.innerHTML = origHtml;
+        }
+      }
+    }
+
+    async function saveReflectionToNativeVault() {
+      if (!lastGeneratedReflectionMarkdown) {
+        showToast('保存するリフレクションがありません', 'error');
+        return;
+      }
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        const res = await fetch('/api/save/reflection', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            date: today,
+            content: lastGeneratedReflectionMarkdown
+          })
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+
+        const badge = document.getElementById('nativeReflectionSavedBadge');
+        if (badge) badge.classList.remove('hidden');
+
+        showToast(`Vaultに保存しました: ${data.savedPath}`, 'success');
+      } catch (err) {
+        showToast(`Vault保存エラー: ${err.message}`, 'error');
+      }
+    }
+
     // Event Listeners
     window.addEventListener('DOMContentLoaded', () => {
       lucide.createIcons();
       updateDisplayWithConfig();
       checkDraftStatus();
+      checkNativeMode();
 
       // Register Service Worker for PWA
       if ('serviceWorker' in navigator) {
@@ -3352,6 +3812,20 @@
           geminiApiKey: document.getElementById('inputGeminiApiKey').value.trim(),
           geminiModel: document.getElementById('selectGeminiModel').value
         });
+
+        if (isNativeMode) {
+          const nativeClaudeCmd = document.getElementById('inputNativeClaudeCmd')?.value.trim();
+          const nativeSaveDir = document.getElementById('inputNativeSaveDir')?.value.trim();
+          fetch('/api/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              claudeCommand: nativeClaudeCmd || 'claude',
+              saveDir: nativeSaveDir || 'data/meetings'
+            })
+          }).catch(err => console.warn('Native config update failed:', err));
+        }
+
         closeSettings();
         showToast('設定を保存しました', 'success');
       });
@@ -3387,6 +3861,28 @@
       document.getElementById('btnDownloadReadme').addEventListener('click', downloadLastMeetingReadme);
       document.getElementById('btnDismissMeetingSuccess').addEventListener('click', () => {
         document.getElementById('meetingSuccessCard').classList.add('hidden');
+      });
+
+      // Native Mode Button Listeners
+      const btnNativeSave = document.getElementById('btnNativeSaveMeeting');
+      if (btnNativeSave) btnNativeSave.addEventListener('click', saveMeetingToNativeFolder);
+
+      const btnNativeOpen = document.getElementById('btnNativeOpenFolder');
+      if (btnNativeOpen) btnNativeOpen.addEventListener('click', openNativeMeetingFolder);
+
+      const btnNativeClaudeSum = document.getElementById('btnNativeClaudeSummary');
+      if (btnNativeClaudeSum) btnNativeClaudeSum.addEventListener('click', generateMeetingSummaryWithClaude);
+
+      const btnNativeRefl = document.getElementById('btnNativeGenerateReflection');
+      if (btnNativeRefl) btnNativeRefl.addEventListener('click', generateReflectionWithClaude);
+
+      const btnNativeSaveRefl = document.getElementById('btnNativeSaveReflection');
+      if (btnNativeSaveRefl) btnNativeSaveRefl.addEventListener('click', saveReflectionToNativeVault);
+
+      const btnNativeFinishRefl = document.getElementById('btnNativeFinishReflection');
+      if (btnNativeFinishRefl) btnNativeFinishRefl.addEventListener('click', () => {
+        document.getElementById('nativeReflectionResultCard')?.classList.add('hidden');
+        resetRecordingUI();
       });
 
       // System Audio Missing Modal Actions
