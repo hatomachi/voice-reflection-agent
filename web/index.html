@@ -423,15 +423,41 @@
             </div>
           </div>
 
-          <!-- Audio Wave / Volume Bars -->
-          <div class="flex items-center gap-1 h-5 px-3 py-1 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
-            <i data-lucide="mic" class="w-3.5 h-3.5 text-zinc-500 mr-1"></i>
-            <span id="meetingVol1" class="w-1 bg-emerald-500 rounded-full h-1 transition-all duration-75"></span>
-            <span id="meetingVol2" class="w-1 bg-emerald-500 rounded-full h-1 transition-all duration-75"></span>
-            <span id="meetingVol3" class="w-1 bg-emerald-500 rounded-full h-1 transition-all duration-75"></span>
-            <span id="meetingVol4" class="w-1 bg-emerald-500 rounded-full h-1 transition-all duration-75"></span>
-            <span id="meetingVol5" class="w-1 bg-emerald-500 rounded-full h-1 transition-all duration-75"></span>
-            <span id="meetingAudioStatus" class="text-[10px] text-zinc-500 ml-1.5 font-mono">マイク待機</span>
+          <!-- Dual Audio Wave Monitors (Mic & Speaker) -->
+          <div class="flex flex-wrap items-center gap-2">
+            <!-- 🎙️ Mic Monitor (Your Voice) -->
+            <div id="meetingMicCard" class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-950/70 border border-zinc-800/80 transition">
+              <div class="flex items-center gap-1.5">
+                <i data-lucide="mic" class="w-3.5 h-3.5 text-emerald-400"></i>
+                <span class="text-[11px] font-medium text-zinc-300">マイク</span>
+              </div>
+              <!-- 5 Wave Bars for Mic -->
+              <div class="flex items-end gap-0.5 h-4 w-6 px-0.5">
+                <span id="meetingMicBar1" class="w-1 bg-emerald-500 rounded-full h-1 transition-all duration-75"></span>
+                <span id="meetingMicBar2" class="w-1 bg-emerald-500 rounded-full h-1 transition-all duration-75"></span>
+                <span id="meetingMicBar3" class="w-1 bg-emerald-500 rounded-full h-1 transition-all duration-75"></span>
+                <span id="meetingMicBar4" class="w-1 bg-emerald-500 rounded-full h-1 transition-all duration-75"></span>
+                <span id="meetingMicBar5" class="w-1 bg-emerald-500 rounded-full h-1 transition-all duration-75"></span>
+              </div>
+              <span id="meetingMicStatus" class="text-[10px] text-zinc-500 font-mono">待機</span>
+            </div>
+
+            <!-- 🔊 Speaker Monitor (System / Others Voice) -->
+            <div id="meetingSpeakerCard" class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-950/70 border border-zinc-800/80 transition" title="画面共有時のシステム音声（相手の声）モニター">
+              <div class="flex items-center gap-1.5">
+                <i id="meetingSpeakerIcon" data-lucide="volume-2" class="w-3.5 h-3.5 text-cyan-400"></i>
+                <span class="text-[11px] font-medium text-zinc-300">相手・PC音</span>
+              </div>
+              <!-- 5 Wave Bars for Speaker -->
+              <div id="meetingSpeakerBarsContainer" class="flex items-end gap-0.5 h-4 w-6 px-0.5">
+                <span id="meetingSpeakerBar1" class="w-1 bg-cyan-400 rounded-full h-1 transition-all duration-75"></span>
+                <span id="meetingSpeakerBar2" class="w-1 bg-cyan-400 rounded-full h-1 transition-all duration-75"></span>
+                <span id="meetingSpeakerBar3" class="w-1 bg-cyan-400 rounded-full h-1 transition-all duration-75"></span>
+                <span id="meetingSpeakerBar4" class="w-1 bg-cyan-400 rounded-full h-1 transition-all duration-75"></span>
+                <span id="meetingSpeakerBar5" class="w-1 bg-cyan-400 rounded-full h-1 transition-all duration-75"></span>
+              </div>
+              <span id="meetingSpeakerStatus" class="text-[10px] text-zinc-500 font-mono">待機</span>
+            </div>
           </div>
         </div>
 
@@ -798,6 +824,8 @@
     let meetingAudioChunks = [];
     let meetingAudioContext = null;
     let meetingAnalyserNode = null;
+    let meetingMicAnalyserNode = null;
+    let meetingSpeakerAnalyserNode = null;
     let meetingMeterAnimId = null;
     let meetingTimerId = null;
     let meetingStartTime = null;
@@ -2311,6 +2339,13 @@
           onScreenCaptureEnded();
         };
 
+        const audioTracks = stream.getAudioTracks();
+        const hasAudio = audioTracks.length > 0;
+        updateSpeakerUIState(true, hasAudio);
+        if (!hasAudio) {
+          showToast('⚠️ システム音声が共有されていません。相手の声も録音する場合は共有時に「システム音声を共有」を有効にしてください', 'warning');
+        }
+
         showToast('画面共有を開始しました', 'success');
         return true;
       } catch (err) {
@@ -2333,6 +2368,7 @@
       if (!isMeetingRecording) {
         document.getElementById('btnManualCapture').disabled = true;
       }
+      updateSpeakerUIState(false, false);
       showToast('画面共有が停止されました', 'info');
     }
 
@@ -2370,43 +2406,146 @@
       return `${hh}:${mi}:${ss}`;
     }
 
-    function startMeetingAudioMeter(analyser) {
-      meetingAnalyserNode = analyser;
-      const dataArray = new Uint8Array(analyser.frequencyBinCount);
-      const bars = [
-        document.getElementById('meetingVol1'),
-        document.getElementById('meetingVol2'),
-        document.getElementById('meetingVol3'),
-        document.getElementById('meetingVol4'),
-        document.getElementById('meetingVol5')
+    function updateSpeakerUIState(hasScreen, hasAudio) {
+      const card = document.getElementById('meetingSpeakerCard');
+      const icon = document.getElementById('meetingSpeakerIcon');
+      const label = document.getElementById('meetingSpeakerStatus');
+      const container = document.getElementById('meetingSpeakerBarsContainer');
+      if (!card || !label) return;
+
+      if (!hasScreen) {
+        label.innerText = '待機';
+        label.className = 'text-[10px] text-zinc-500 font-mono';
+        card.className = 'flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-950/70 border border-zinc-800/80 transition';
+        if (container) container.classList.remove('hidden');
+        if (icon) {
+          icon.setAttribute('data-lucide', 'volume-2');
+          icon.className = 'w-3.5 h-3.5 text-cyan-400';
+        }
+      } else if (hasAudio) {
+        label.innerText = isMeetingRecording ? '共有中' : '共有中 (OK)';
+        label.className = 'text-[10px] text-cyan-400 font-mono font-medium';
+        card.className = 'flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-950/70 border border-cyan-900/60 transition';
+        if (container) container.classList.remove('hidden');
+        if (icon) {
+          icon.setAttribute('data-lucide', 'volume-2');
+          icon.className = 'w-3.5 h-3.5 text-cyan-400';
+        }
+      } else {
+        label.innerText = '⚠️ 音声未共有';
+        label.className = 'text-[10px] text-amber-300 font-mono font-medium';
+        card.className = 'flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-950/30 border border-amber-700/60 transition';
+        if (container) container.classList.add('hidden');
+        if (icon) {
+          icon.setAttribute('data-lucide', 'volume-x');
+          icon.className = 'w-3.5 h-3.5 text-amber-400';
+        }
+      }
+      lucide.createIcons();
+    }
+
+    function startMeetingAudioMeter(micAnalyser, speakerAnalyser = null) {
+      meetingMicAnalyserNode = micAnalyser;
+      meetingSpeakerAnalyserNode = speakerAnalyser;
+      meetingAnalyserNode = micAnalyser; // 後方互換
+
+      const micDataArray = micAnalyser ? new Uint8Array(micAnalyser.frequencyBinCount) : null;
+      const speakerDataArray = speakerAnalyser ? new Uint8Array(speakerAnalyser.frequencyBinCount) : null;
+
+      const micBars = [
+        document.getElementById('meetingMicBar1'),
+        document.getElementById('meetingMicBar2'),
+        document.getElementById('meetingMicBar3'),
+        document.getElementById('meetingMicBar4'),
+        document.getElementById('meetingMicBar5')
       ];
-      const statusLabel = document.getElementById('meetingAudioStatus');
+      const micStatusLabel = document.getElementById('meetingMicStatus');
+
+      const speakerBars = [
+        document.getElementById('meetingSpeakerBar1'),
+        document.getElementById('meetingSpeakerBar2'),
+        document.getElementById('meetingSpeakerBar3'),
+        document.getElementById('meetingSpeakerBar4'),
+        document.getElementById('meetingSpeakerBar5')
+      ];
+      const speakerStatusLabel = document.getElementById('meetingSpeakerStatus');
+
+      // 5バンドの周波数帯域分割（fftSize: 32 -> binCount: 16）
+      // 低音(0-2), 中低音(2-5), 中音(5-8), 中高音(8-12), 高音(12-16)
+      const binRanges = [
+        [0, 2],
+        [2, 5],
+        [5, 8],
+        [8, 12],
+        [12, 16]
+      ];
+
+      function computeBands(analyser, data) {
+        analyser.getByteFrequencyData(data);
+        const heights = [];
+        let totalSum = 0;
+        for (let b = 0; b < 5; b++) {
+          const [start, end] = binRanges[b];
+          let bandSum = 0;
+          const count = Math.min(end, data.length) - start;
+          if (count <= 0) {
+            heights.push(4);
+            continue;
+          }
+          for (let i = start; i < Math.min(end, data.length); i++) {
+            bandSum += data[i];
+          }
+          const avg = bandSum / count;
+          totalSum += avg;
+          // avg: 0〜255。声の帯域に合わせて感度を正規化（avg / 100）
+          const norm = Math.min(1, avg / 100);
+          // 4px（無音）〜 18px（最大）
+          const h = Math.max(4, Math.min(18, Math.round(4 + norm * 14)));
+          heights.push(h);
+        }
+        const isSpeaking = (totalSum / 5) > 12;
+        return { heights, isSpeaking };
+      }
 
       function updateMeter() {
         if (!isMeetingRecording) {
-          bars.forEach(b => { if (b) b.style.height = '4px'; });
-          if (statusLabel) statusLabel.innerText = 'マイク待機';
+          micBars.forEach(b => { if (b) b.style.height = '4px'; });
+          if (micStatusLabel) {
+            micStatusLabel.innerText = '待機';
+            micStatusLabel.className = 'text-[10px] text-zinc-500 font-mono';
+          }
+          speakerBars.forEach(b => { if (b) b.style.height = '4px'; });
           return;
         }
 
-        meetingAnalyserNode.getByteFrequencyData(dataArray);
-        let sum = 0;
-        for (let i = 0; i < dataArray.length; i++) {
-          sum += dataArray[i];
-        }
-        const avg = sum / dataArray.length;
-        const norm = Math.min(1, avg / 80);
-
-        bars.forEach((b, idx) => {
-          if (b) {
-            const h = Math.max(4, Math.min(20, Math.round(norm * 20 * (0.8 + (idx % 3) * 0.2))));
-            b.style.height = `${h}px`;
+        // --- マイク側の更新 ---
+        if (meetingMicAnalyserNode && micDataArray) {
+          const { heights, isSpeaking } = computeBands(meetingMicAnalyserNode, micDataArray);
+          micBars.forEach((b, idx) => {
+            if (b) b.style.height = `${heights[idx]}px`;
+          });
+          if (micStatusLabel) {
+            micStatusLabel.innerText = isSpeaking ? '入力検知' : '無音';
+            micStatusLabel.className = isSpeaking ? 'text-[10px] text-emerald-400 font-mono font-medium' : 'text-[10px] text-zinc-500 font-mono';
           }
-        });
+        }
 
-        if (statusLabel) {
-          statusLabel.innerText = norm > 0.1 ? '録音中 (マイク検知)' : '録音中 (無音)';
-          statusLabel.className = norm > 0.1 ? 'text-[10px] text-emerald-400 ml-1.5 font-mono' : 'text-[10px] text-zinc-500 ml-1.5 font-mono';
+        // --- スピーカー側の更新 ---
+        if (meetingSpeakerAnalyserNode && speakerDataArray) {
+          const { heights, isSpeaking } = computeBands(meetingSpeakerAnalyserNode, speakerDataArray);
+          speakerBars.forEach((b, idx) => {
+            if (b) b.style.height = `${heights[idx]}px`;
+          });
+          if (speakerStatusLabel) {
+            speakerStatusLabel.innerText = isSpeaking ? '検知中' : '無音';
+            speakerStatusLabel.className = isSpeaking ? 'text-[10px] text-cyan-400 font-mono font-medium' : 'text-[10px] text-zinc-500 font-mono';
+          }
+        } else {
+          speakerBars.forEach(b => { if (b) b.style.height = '4px'; });
+          if (speakerStatusLabel) {
+            speakerStatusLabel.innerText = '⚠️ 未共有';
+            speakerStatusLabel.className = 'text-[10px] text-amber-300 font-mono font-medium';
+          }
         }
 
         meetingMeterAnimId = requestAnimationFrame(updateMeter);
@@ -2681,17 +2820,26 @@
         const micSource = meetingAudioContext.createMediaStreamSource(micStream);
         micSource.connect(dest);
 
-        // 画面共有音声があればミックス
+        // マイク用 AnalyserNode
+        const micAnalyser = meetingAudioContext.createAnalyser();
+        micAnalyser.fftSize = 32;
+        micAnalyser.smoothingTimeConstant = 0.4;
+        micSource.connect(micAnalyser);
+
+        // 画面共有音声があればミックス & Analyser接続
+        let speakerAnalyser = null;
         if (meetingScreenStream && meetingScreenStream.getAudioTracks().length > 0) {
           const screenAudioSource = meetingAudioContext.createMediaStreamSource(meetingScreenStream);
           screenAudioSource.connect(dest);
+
+          speakerAnalyser = meetingAudioContext.createAnalyser();
+          speakerAnalyser.fftSize = 32;
+          speakerAnalyser.smoothingTimeConstant = 0.4;
+          screenAudioSource.connect(speakerAnalyser);
         }
 
-        // 音量メーター
-        const analyser = meetingAudioContext.createAnalyser();
-        analyser.fftSize = 64;
-        micSource.connect(analyser);
-        startMeetingAudioMeter(analyser);
+        // 音量メーター開始（マイク ＆ スピーカー独立波形）
+        startMeetingAudioMeter(micAnalyser, speakerAnalyser);
 
         // MediaRecorder開始
         meetingAudioChunks = [];
@@ -2752,6 +2900,31 @@
       if (meetingDiffIntervalId) clearInterval(meetingDiffIntervalId);
       if (meetingTimerId) clearInterval(meetingTimerId);
       if (meetingMeterAnimId) cancelAnimationFrame(meetingMeterAnimId);
+
+      // メーターUIのリセット
+      const micBars = [
+        document.getElementById('meetingMicBar1'),
+        document.getElementById('meetingMicBar2'),
+        document.getElementById('meetingMicBar3'),
+        document.getElementById('meetingMicBar4'),
+        document.getElementById('meetingMicBar5')
+      ];
+      micBars.forEach(b => { if (b) b.style.height = '4px'; });
+      const micStatusLabel = document.getElementById('meetingMicStatus');
+      if (micStatusLabel) {
+        micStatusLabel.innerText = '待機';
+        micStatusLabel.className = 'text-[10px] text-zinc-500 font-mono';
+      }
+      const speakerBars = [
+        document.getElementById('meetingSpeakerBar1'),
+        document.getElementById('meetingSpeakerBar2'),
+        document.getElementById('meetingSpeakerBar3'),
+        document.getElementById('meetingSpeakerBar4'),
+        document.getElementById('meetingSpeakerBar5')
+      ];
+      speakerBars.forEach(b => { if (b) b.style.height = '4px'; });
+      const hasSpeakerAudio = meetingScreenStream && meetingScreenStream.getAudioTracks().length > 0;
+      updateSpeakerUIState(!!meetingScreenStream, hasSpeakerAudio);
 
       isMeetingRecording = false;
       updateMeetingUIRecordingState(false);
