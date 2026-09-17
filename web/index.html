@@ -469,8 +469,16 @@
                 <option value="high">高（わずかな変化も）</option>
               </select>
             </span>
-            <span class="text-zinc-500">| 間隔: 最低5秒</span>
-            <span class="px-1.5 py-0.5 rounded bg-zinc-800 text-amber-300 font-mono text-[10px]">JPEG 0.85 & MP3</span>
+            <span class="flex items-center gap-1">
+              <span>最小間隔:</span>
+              <select id="selectInterval" class="bg-zinc-800 border border-zinc-700 text-zinc-200 rounded px-1.5 py-0.5 text-[11px] focus:outline-none">
+                <option value="5000">5秒（細かく記録）</option>
+                <option value="10000" selected>10秒（標準・スライド推奨）</option>
+                <option value="20000">20秒（長会議向け）</option>
+                <option value="30000">30秒（省エネ）</option>
+              </select>
+            </span>
+            <span class="px-1.5 py-0.5 rounded bg-zinc-800 text-amber-300 font-mono text-[10px]">24kHz mono & JPEG</span>
           </div>
         </div>
       </div>
@@ -479,7 +487,17 @@
       <div id="meetingProcessingCard" class="hidden p-5 rounded-2xl bg-zinc-900 border border-zinc-800 text-center space-y-3 shadow-xl">
         <div class="inline-block animate-spin rounded-full h-8 w-8 border-2 border-cyan-500 border-t-transparent"></div>
         <p id="meetingProcessingMsg" class="text-sm font-medium text-zinc-200">音声データをMP3に変換中...</p>
-        <p class="text-[11px] text-zinc-500">ブラウザ内で軽量・高音質なMP3を高速生成し、GitHubにコミットしています</p>
+        
+        <!-- プログレスバー -->
+        <div id="meetingProgressContainer" class="w-full max-w-md mx-auto bg-zinc-950 rounded-full h-2.5 overflow-hidden border border-zinc-800 my-2">
+          <div id="meetingProgressBar" class="bg-gradient-to-r from-cyan-500 to-emerald-400 h-2.5 rounded-full transition-all duration-150" style="width: 0%"></div>
+        </div>
+        <div class="flex items-center justify-between max-w-md mx-auto text-[11px] text-zinc-400 px-1">
+          <span id="meetingProgressDetail">最適化中...</span>
+          <span id="meetingProgressPercent" class="font-mono text-cyan-300 font-semibold">0%</span>
+        </div>
+
+        <p class="text-[11px] text-zinc-500">バックグラウンド（Web Worker）で高速MP3生成中。画面は固まりません。</p>
       </div>
 
       <!-- Meeting Finished & Success Card -->
@@ -2028,15 +2046,33 @@
       return await response.json();
     }
 
-    function encodeAudioBufferToMp3(audioBuffer, kbps = 128) {
-      if (typeof lamejs === 'undefined') {
-        throw new Error('LAME MP3エンコーダライブラリが読み込まれていません');
-      }
-      const sampleRate = audioBuffer.sampleRate;
-      const length = audioBuffer.length;
-      const numChannels = audioBuffer.numberOfChannels;
+    // --- 高速・長時間耐性 MP3 エンコーダ (OfflineAudioContext 24kHz + Web Worker) ---
 
-      // 会議・会話音声に最適化するためモノラル化
+    async function resampleAndDownmixToMono(audioBuffer, targetSampleRate = 24000) {
+      const numChannels = audioBuffer.numberOfChannels;
+      const duration = audioBuffer.duration;
+      const targetLength = Math.max(1, Math.ceil(duration * targetSampleRate));
+
+      const OfflineCtxClass = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+      if (OfflineCtxClass) {
+        try {
+          const offlineCtx = new OfflineCtxClass(1, targetLength, targetSampleRate);
+          const source = offlineCtx.createBufferSource();
+          source.buffer = audioBuffer;
+          source.connect(offlineCtx.destination);
+          source.start(0);
+          const rendered = await offlineCtx.startRendering();
+          return {
+            samples: rendered.getChannelData(0),
+            sampleRate: targetSampleRate
+          };
+        } catch (e) {
+          console.warn('OfflineAudioContext によるリサンプリングに失敗しました。フォールバックします:', e);
+        }
+      }
+
+      // フォールバック: 元のサンプリングレートでモノラル化
+      const length = audioBuffer.length;
       const monoSamples = new Float32Array(length);
       if (numChannels === 1) {
         monoSamples.set(audioBuffer.getChannelData(0));
@@ -2047,31 +2083,163 @@
           monoSamples[i] = (left[i] + right[i]) * 0.5;
         }
       }
+      return {
+        samples: monoSamples,
+        sampleRate: audioBuffer.sampleRate
+      };
+    }
 
-      // Float32 (-1.0 to 1.0) を Int16 (-32768 to 32767) に変換
-      const int16Samples = new Int16Array(length);
-      for (let i = 0; i < length; i++) {
-        const s = Math.max(-1, Math.min(1, monoSamples[i]));
+    const MP3_WORKER_SCRIPT = `
+      self.onmessage = function(e) {
+        const msg = e.data;
+        if (msg.cmd === 'encode') {
+          try {
+            if (typeof lamejs === 'undefined') {
+              try {
+                importScripts('https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js');
+              } catch (loadErr) {
+                self.postMessage({ type: 'error', error: 'Worker内でのlamejs読み込み失敗: ' + loadErr.message });
+                return;
+              }
+            }
+
+            const floatSamples = msg.samples;
+            const sampleRate = msg.sampleRate || 24000;
+            const kbps = msg.kbps || 64;
+            const totalSamples = floatSamples.length;
+
+            const int16Samples = new Int16Array(totalSamples);
+            for (let i = 0; i < totalSamples; i++) {
+              const s = Math.max(-1, Math.min(1, floatSamples[i]));
+              int16Samples[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+            }
+
+            const mp3Encoder = new lamejs.Mp3Encoder(1, sampleRate, kbps);
+            const mp3Chunks = [];
+            const sampleBlockSize = 1152;
+            let lastReportedPct = -1;
+
+            for (let i = 0; i < totalSamples; i += sampleBlockSize) {
+              const chunk = int16Samples.subarray(i, i + sampleBlockSize);
+              const mp3buf = mp3Encoder.encodeBuffer(chunk);
+              if (mp3buf && mp3buf.length > 0) {
+                mp3Chunks.push(mp3buf);
+              }
+
+              const pct = Math.min(99, Math.round((i / totalSamples) * 100));
+              if (pct > lastReportedPct && pct % 2 === 0) {
+                lastReportedPct = pct;
+                self.postMessage({ type: 'progress', percent: pct });
+              }
+            }
+
+            const finalBuf = mp3Encoder.flush();
+            if (finalBuf && finalBuf.length > 0) {
+              mp3Chunks.push(finalBuf);
+            }
+
+            self.postMessage({ type: 'progress', percent: 100 });
+            const mp3Blob = new Blob(mp3Chunks, { type: 'audio/mp3' });
+            self.postMessage({ type: 'done', blob: mp3Blob });
+
+          } catch (err) {
+            self.postMessage({ type: 'error', error: err.message });
+          }
+        }
+      };
+    `;
+
+    async function encodeAudioToMp3WithWorker(floatSamples, sampleRate = 24000, kbps = 64, onProgress = null) {
+      if (window.Worker) {
+        try {
+          const blob = new Blob([MP3_WORKER_SCRIPT], { type: 'application/javascript' });
+          const workerUrl = URL.createObjectURL(blob);
+          const worker = new Worker(workerUrl);
+
+          return await new Promise((resolve, reject) => {
+            worker.onmessage = (e) => {
+              const res = e.data;
+              if (res.type === 'progress') {
+                if (onProgress) onProgress(res.percent);
+              } else if (res.type === 'done') {
+                worker.terminate();
+                URL.revokeObjectURL(workerUrl);
+                resolve(res.blob);
+              } else if (res.type === 'error') {
+                worker.terminate();
+                URL.revokeObjectURL(workerUrl);
+                reject(new Error(res.error));
+              }
+            };
+
+            worker.onerror = (err) => {
+              worker.terminate();
+              URL.revokeObjectURL(workerUrl);
+              reject(new Error(err.message || 'Worker execution error'));
+            };
+
+            worker.postMessage({
+              cmd: 'encode',
+              samples: floatSamples,
+              sampleRate: sampleRate,
+              kbps: kbps
+            });
+          });
+        } catch (workerInitErr) {
+          console.warn('Web Workerの初期化に失敗したため、メインスレッドのチャンク実行に切り替えます:', workerInitErr);
+        }
+      }
+
+      // フォールバック: メインスレッドで setTimeout チャンク分割実行（UIフリーズ防止）
+      return await encodeAudioMainThreadChunked(floatSamples, sampleRate, kbps, onProgress);
+    }
+
+    async function encodeAudioMainThreadChunked(floatSamples, sampleRate = 24000, kbps = 64, onProgress = null) {
+      if (typeof lamejs === 'undefined') {
+        throw new Error('LAME MP3エンコーダライブラリが読み込まれていません');
+      }
+
+      const totalSamples = floatSamples.length;
+      const int16Samples = new Int16Array(totalSamples);
+      for (let i = 0; i < totalSamples; i++) {
+        const s = Math.max(-1, Math.min(1, floatSamples[i]));
         int16Samples[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
       }
 
       const mp3Encoder = new lamejs.Mp3Encoder(1, sampleRate, kbps);
       const mp3Chunks = [];
       const sampleBlockSize = 1152;
+      const batchSize = sampleBlockSize * 150; // 約150ブロックごとにUIスレッドに制御を返却
 
-      for (let i = 0; i < int16Samples.length; i += sampleBlockSize) {
-        const chunk = int16Samples.subarray(i, i + sampleBlockSize);
-        const mp3buf = mp3Encoder.encodeBuffer(chunk);
-        if (mp3buf && mp3buf.length > 0) {
-          mp3Chunks.push(mp3buf);
+      let offset = 0;
+      while (offset < totalSamples) {
+        const end = Math.min(offset + batchSize, totalSamples);
+        for (let i = offset; i < end; i += sampleBlockSize) {
+          const chunk = int16Samples.subarray(i, i + sampleBlockSize);
+          const mp3buf = mp3Encoder.encodeBuffer(chunk);
+          if (mp3buf && mp3buf.length > 0) {
+            mp3Chunks.push(mp3buf);
+          }
         }
+        offset = end;
+        const pct = Math.min(99, Math.round((offset / totalSamples) * 100));
+        if (onProgress) onProgress(pct);
+        await new Promise(r => setTimeout(r, 0));
       }
+
       const finalBuf = mp3Encoder.flush();
       if (finalBuf && finalBuf.length > 0) {
         mp3Chunks.push(finalBuf);
       }
+      if (onProgress) onProgress(100);
 
       return new Blob(mp3Chunks, { type: 'audio/mp3' });
+    }
+
+    // 後方互換性用ラッパー
+    async function encodeAudioBufferToMp3(audioBuffer, kbps = 64, onProgress = null) {
+      const { samples, sampleRate } = await resampleAndDownmixToMono(audioBuffer, 24000);
+      return await encodeAudioToMp3WithWorker(samples, sampleRate, kbps, onProgress);
     }
 
     function switchAppMode(mode) {
@@ -2283,9 +2451,12 @@
       if (sensitivity === 'low') targetRatio = 0.07; // 7%
       if (sensitivity === 'high') targetRatio = 0.018; // 1.8%
 
+      const selectIntervalEl = document.getElementById('selectInterval');
+      const minInterval = selectIntervalEl ? parseInt(selectIntervalEl.value, 10) : 10000;
+
       const now = Date.now();
-      if (changeRatio >= targetRatio && (now - lastCaptureTime) >= MIN_CAPTURE_INTERVAL_MS) {
-        console.log(`[Diff Detected] Screen changed by ${(changeRatio * 100).toFixed(1)}% (threshold: ${(targetRatio * 100).toFixed(1)}%)`);
+      if (changeRatio >= targetRatio && (now - lastCaptureTime) >= minInterval) {
+        console.log(`[Diff Detected] Screen changed by ${(changeRatio * 100).toFixed(1)}% (threshold: ${(targetRatio * 100).toFixed(1)}%, interval: ${minInterval / 1000}s)`);
         takeMeetingScreenshot('auto');
       }
     }
@@ -2455,7 +2626,7 @@
       md += `- **開催フォルダ**: \`00_Inbox/Meetings/${folder}/\`\n`;
       md += `- **録音時間**: ${durationStr}\n`;
       md += `- **撮影スクショ**: ${screenshots.length} 枚 (JPEG 形式)\n`;
-      md += `- **音声ファイル**: [meeting_audio.mp3](meeting_audio.mp3) (MP3 形式 / 128kbps mono)\n\n`;
+      md += `- **音声ファイル**: [meeting_audio.mp3](meeting_audio.mp3) (MP3 形式 / 24kHz 64kbps mono - 人の声・AI認識に最適化)\n\n`;
       md += `---\n\n`;
       md += `## 🎙️ 会議音声\n\n`;
       md += `![[meeting_audio.mp3]]\n\n`;
@@ -2587,8 +2758,19 @@
 
       const processingCard = document.getElementById('meetingProcessingCard');
       const processingMsg = document.getElementById('meetingProcessingMsg');
+      const progressBar = document.getElementById('meetingProgressBar');
+      const progressDetail = document.getElementById('meetingProgressDetail');
+      const progressPercent = document.getElementById('meetingProgressPercent');
+
+      function updateMeetingProgress(pct, msg, detail) {
+        if (progressBar) progressBar.style.width = `${pct}%`;
+        if (progressPercent) progressPercent.innerText = `${pct}%`;
+        if (msg && processingMsg) processingMsg.innerText = msg;
+        if (detail && progressDetail) progressDetail.innerText = detail;
+      }
+
       processingCard.classList.remove('hidden');
-      processingMsg.innerText = '音声データをMP3に変換中...';
+      updateMeetingProgress(0, '録音データを停止・集計中...', 'MediaRecorder 停止処理...');
 
       // 録音停止
       await new Promise((resolve) => {
@@ -2600,15 +2782,30 @@
       const durationSeconds = Math.round((Date.now() - meetingStartTime) / 1000);
 
       try {
+        updateMeetingProgress(5, '音声デコード中...', 'ブラウザネイティブデコード実行中');
         // 1. AudioBuffer にデコード
         const arrayBuf = await rawBlob.arrayBuffer();
         const audioBuf = await meetingAudioContext.decodeAudioData(arrayBuf);
 
-        // 2. LAME MP3 エンコード
-        const mp3Blob = encodeAudioBufferToMp3(audioBuf, 128);
+        // 2. 24,000Hz モノラルへ高速リサンプリング (ブラウザNative C++エンジン)
+        updateMeetingProgress(15, '音声を会議向けに最適化中...', '24kHz モノラルリサンプリング実行中');
+        const { samples: monoSamples, sampleRate: targetSampleRate } = await resampleAndDownmixToMono(audioBuf, 24000);
+
+        // 3. Web Worker による高速 MP3 エンコード (進捗バー連動)
+        updateMeetingProgress(20, 'MP3音声を生成中（Web Worker）...', 'バックグラウンドスレッドでエンコード中');
+        const mp3Blob = await encodeAudioToMp3WithWorker(
+          monoSamples,
+          targetSampleRate,
+          64, // 64kbps mono: 会議・人の声に最適、1時間でも約28MB
+          (workerPct) => {
+            const overallPct = Math.round(20 + (workerPct * 0.7)); // 20% 〜 90%
+            updateMeetingProgress(overallPct, `MP3音声を生成中（${workerPct}%）...`, `Web Worker稼働中: UIは固まりません (${workerPct}%)`);
+          }
+        );
         meetingLastMp3Blob = mp3Blob;
 
-        // 3. 会議Markdown 生成
+        // 4. 会議Markdown 生成
+        updateMeetingProgress(92, '会議サマリーを作成中...', '議事録 (README.md) の自動生成');
         const readmeContent = generateMeetingMarkdown(currentMeetingFolder, durationSeconds, meetingScreenshots);
         meetingLastReadmeContent = readmeContent;
 
@@ -2616,10 +2813,10 @@
         const provider = cfg.gitProvider || 'github';
         const hasGitCredentials = (provider === 'github' && cfg.githubToken) || (provider === 'gitlab' && cfg.gitlabToken && cfg.gitlabUrl && cfg.gitlabProjectId);
 
-        // 4. Git保存（Credentialsがあり、Localモードでない場合）
+        // 5. Git保存（Credentialsがあり、Localモードでない場合）
         if (hasGitCredentials && provider !== 'local') {
           const providerLabel = provider === 'gitlab' ? 'GitLab' : 'GitHub';
-          processingMsg.innerText = `${providerLabel}へMP3音声を保存中...`;
+          updateMeetingProgress(94, `${providerLabel}へMP3音声を保存中...`, `00_Inbox/Meetings/${currentMeetingFolder}/meeting_audio.mp3`);
           const mp3Base64 = await blobToBase64(mp3Blob);
           const mp3Path = `00_Inbox/Meetings/${currentMeetingFolder}/meeting_audio.mp3`;
           await commitBinaryFile(
@@ -2628,7 +2825,7 @@
             `feat(meeting): meeting audio mp3 (${currentMeetingFolder})`
           );
 
-          processingMsg.innerText = '会議サマリー（README.md）を生成中...';
+          updateMeetingProgress(97, `${providerLabel}へ議事録を保存中...`, `00_Inbox/Meetings/${currentMeetingFolder}/README.md`);
           const readmeBase64 = utf8ToBase64(readmeContent);
           const readmePath = `00_Inbox/Meetings/${currentMeetingFolder}/README.md`;
           await commitBinaryFile(
@@ -2637,8 +2834,10 @@
             `docs(meeting): meeting summary & screenshots (${currentMeetingFolder})`
           );
         } else {
-          processingMsg.innerText = 'ローカル保存の準備完了！';
+          updateMeetingProgress(98, 'ローカル保存の準備完了！', '手元保存の準備が整いました');
         }
+
+        updateMeetingProgress(100, '会議記録の保存完了！', 'すべての処理が完了しました');
 
         // 5. 完了UI表示
         processingCard.classList.add('hidden');
@@ -2756,7 +2955,25 @@
           }
         }
 
-        const zipBlob = await zip.generateAsync({ type: 'blob' });
+        const btnZip = document.getElementById('btnDownloadZip');
+        const origBtnHtml = btnZip ? btnZip.innerHTML : '';
+        if (btnZip) {
+          btnZip.disabled = true;
+          btnZip.innerHTML = '<span class="inline-block animate-spin mr-1">⏳</span><span>ZIP圧縮中 (0%)...</span>';
+        }
+
+        const zipBlob = await zip.generateAsync({ type: 'blob' }, (metadata) => {
+          const pct = Math.round(metadata.percent);
+          if (btnZip) {
+            btnZip.innerHTML = `<span class="inline-block animate-spin mr-1">⏳</span><span>ZIP圧縮中 (${pct}%)...</span>`;
+          }
+        });
+
+        if (btnZip) {
+          btnZip.disabled = false;
+          btnZip.innerHTML = origBtnHtml;
+        }
+
         const url = URL.createObjectURL(zipBlob);
         const a = document.createElement('a');
         a.href = url;
@@ -2769,6 +2986,11 @@
         showToast(`会議一式（${meetingScreenshots.length}枚スクショ + MP3 + MD）をZIP保存しました！`, 'success');
       } catch (e) {
         console.error('ZIP generation error:', e);
+        const btnZip = document.getElementById('btnDownloadZip');
+        if (btnZip) {
+          btnZip.disabled = false;
+          btnZip.innerHTML = '<span>📦 会議一式を保存 (ZIP)</span>';
+        }
         showToast(`ZIP作成エラー: ${e.message}`, 'error');
       }
     }
