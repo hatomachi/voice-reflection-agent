@@ -382,6 +382,11 @@
                 スライドの切り替えなどの変化を自動検知してスクショを撮影します。
               </p>
             </div>
+            <!-- System Audio Pre-Guide Badge -->
+            <div class="px-3 py-1.5 rounded-xl bg-amber-950/40 border border-amber-500/30 text-[11px] text-amber-300/90 flex items-center gap-2 max-w-sm text-left shadow-sm">
+              <i data-lucide="volume-2" class="w-4 h-4 text-amber-400 shrink-0"></i>
+              <span>💡 相手の声も録音する場合、選択ダイアログ左下の<strong>「システム音声を共有」</strong>に必ずチェックを入れてください</span>
+            </div>
             <button id="btnSelectScreen" type="button" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-zinc-950 text-xs font-semibold shadow-lg shadow-cyan-950/40 active:scale-95 transition flex items-center gap-2">
               <i data-lucide="screen-share" class="w-4 h-4"></i>
               <span>キャプチャ画面を選択する</span>
@@ -795,6 +800,39 @@
     </div>
   </div>
 
+  <!-- ================= SYSTEM AUDIO MISSING MODAL ================= -->
+  <div id="modalAudioMissing" class="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="w-full max-w-md bg-zinc-900 border border-amber-500/50 rounded-2xl p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+      <div class="flex items-start gap-3.5">
+        <div class="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
+          <i data-lucide="volume-x" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <h3 class="text-sm sm:text-base font-semibold text-zinc-100">システム音声（相手の声）が未共有です</h3>
+          <p class="text-xs text-zinc-400 mt-1 leading-relaxed">
+            このまま録音を開始すると、<strong>自分の声（マイク）しか録音されません</strong>。<br>
+            会議相手の声やPCの音声も一緒に録音するには、画面選択時にチェックが必要です。
+          </p>
+        </div>
+      </div>
+
+      <div class="p-3 rounded-xl bg-amber-950/30 border border-amber-800/40 text-[11px] text-amber-200/90 flex items-center gap-2">
+        <i data-lucide="check-square" class="w-4 h-4 text-amber-400 shrink-0"></i>
+        <span>画面選択ダイアログ左下の<strong>「システム音声を共有する」</strong>にチェック</span>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2">
+        <button id="btnRetryScreenWithAudio" type="button" class="py-2.5 px-4 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-zinc-950 font-semibold text-xs transition flex items-center justify-center gap-1.5 shadow-lg shadow-cyan-950/40">
+          <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+          <span>チェックを入れて選び直す</span>
+        </button>
+        <button id="btnContinueMicOnly" type="button" class="py-2.5 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-medium text-xs transition flex items-center justify-center gap-1.5">
+          <span>マイクのみで続行</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Notification -->
   <div id="toast" class="fixed bottom-6 inset-x-4 max-w-sm mx-auto z-50 bg-zinc-850 border border-zinc-700 text-zinc-100 px-4 py-2.5 rounded-2xl shadow-2xl flex items-center gap-2 text-xs opacity-0 pointer-events-none transition-all duration-300 translate-y-2">
     <i id="toastIcon" data-lucide="info" class="w-4 h-4 text-emerald-400 shrink-0"></i>
@@ -835,6 +873,8 @@
     let meetingLastMp3Blob = null;
     let meetingLastReadmeContent = '';
     let isMeetingRecording = false;
+    let userConfirmedMicOnly = false;
+    let pendingStartRecordOnModal = false;
     let prevFrameData = null;
     let lastCaptureTime = 0;
     const MIN_CAPTURE_INTERVAL_MS = 5000; // スクショ連打防止（最低5秒間隔）
@@ -2317,10 +2357,13 @@
             displaySurface: 'monitor',
             frameRate: { ideal: 15, max: 30 }
           },
-          audio: true // システム音声を共有するオプションを提示
+          audio: {
+            systemAudio: 'include' // システム音声を強く要求する最新ヒント
+          }
         });
 
         meetingScreenStream = stream;
+        userConfirmedMicOnly = false; // 画面共有更新時はリセット
         const video = document.getElementById('meetingScreenVideo');
         video.srcObject = stream;
         video.classList.remove('hidden');
@@ -2343,10 +2386,12 @@
         const hasAudio = audioTracks.length > 0;
         updateSpeakerUIState(true, hasAudio);
         if (!hasAudio) {
-          showToast('⚠️ システム音声が共有されていません。相手の声も録音する場合は共有時に「システム音声を共有」を有効にしてください', 'warning');
+          // 即時リカバリーモーダルを表示（つけ忘れを即座に通知）
+          showModalAudioMissing(false);
+        } else {
+          showToast('画面共有を開始しました（システム音声：OK）', 'success');
         }
 
-        showToast('画面共有を開始しました', 'success');
         return true;
       } catch (err) {
         if (err.name !== 'NotAllowedError') {
@@ -2359,6 +2404,7 @@
 
     function onScreenCaptureEnded() {
       meetingScreenStream = null;
+      userConfirmedMicOnly = false;
       const video = document.getElementById('meetingScreenVideo');
       video.srcObject = null;
       video.classList.add('hidden');
@@ -2369,7 +2415,26 @@
         document.getElementById('btnManualCapture').disabled = true;
       }
       updateSpeakerUIState(false, false);
+      hideModalAudioMissing();
       showToast('画面共有が停止されました', 'info');
+    }
+
+    function showModalAudioMissing(isFromRecordStart = false) {
+      pendingStartRecordOnModal = isFromRecordStart;
+      const modal = document.getElementById('modalAudioMissing');
+      if (modal) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+      }
+      lucide.createIcons();
+    }
+
+    function hideModalAudioMissing() {
+      const modal = document.getElementById('modalAudioMissing');
+      if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      }
     }
 
     function updateMeetingTimer() {
@@ -2799,6 +2864,13 @@
       if (!meetingScreenStream) {
         const ok = await selectScreenCapture();
         if (!ok) return;
+      }
+
+      // インターロック: システム音声が未共有で、ユーザーがまだ「マイクのみで続行」を選んでいない場合
+      const hasAudio = meetingScreenStream.getAudioTracks().length > 0;
+      if (!hasAudio && !userConfirmedMicOnly) {
+        showModalAudioMissing(true);
+        return;
       }
 
       // Note: Git Token is optional! Meeting recorder works in full local-only mode.
@@ -3315,6 +3387,26 @@
       document.getElementById('btnDownloadReadme').addEventListener('click', downloadLastMeetingReadme);
       document.getElementById('btnDismissMeetingSuccess').addEventListener('click', () => {
         document.getElementById('meetingSuccessCard').classList.add('hidden');
+      });
+
+      // System Audio Missing Modal Actions
+      document.getElementById('btnRetryScreenWithAudio').addEventListener('click', async () => {
+        hideModalAudioMissing();
+        const ok = await selectScreenCapture();
+        if (ok && pendingStartRecordOnModal) {
+          pendingStartRecordOnModal = false;
+          startMeetingRecording();
+        }
+      });
+
+      document.getElementById('btnContinueMicOnly').addEventListener('click', () => {
+        userConfirmedMicOnly = true;
+        hideModalAudioMissing();
+        showToast('マイク音声のみで録音します', 'info');
+        if (pendingStartRecordOnModal) {
+          pendingStartRecordOnModal = false;
+          startMeetingRecording();
+        }
       });
 
       // Restore Saved Mode
