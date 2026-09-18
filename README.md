@@ -150,6 +150,22 @@ make build
 # ➡ bin/voice-reflection-agent が生成されます
 ```
 
+### 🤖 GitHub Actions による自動ビルド＆リリース（Releases）
+
+タグを push するか、GitHub の Actions タブから手動実行すると、GitHub Actions が自動でクロスコンパイルを実行し、[GitHub Releases](https://github.com/hatomachi/voice-reflection-agent/releases) に以下のバイナリ一式を自動添付します：
+
+- `voice-reflection-agent.exe` (Windows x64 ポータブル単一exe)
+- `voice-reflection-agent-darwin-arm64` (macOS Apple Silicon)
+- `voice-reflection-agent-darwin-amd64` (macOS Intel)
+- `voice-reflection-agent-linux-amd64` (Linux x64)
+
+```bash
+# タグプッシュで自動リリースをキックする例
+git tag v0.1.0
+git push origin v0.1.0
+```
+※ GitHub Web画面の「Actions」➡「Release」➡「Run workflow」からタグ名（例: `v0.1.0`）を指定していつでも手動実行も可能です。
+
 ---
 
 ## 📥 キューファイル形式（JSON）
