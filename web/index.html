@@ -138,6 +138,18 @@
   <!-- Main Container -->
   <main class="flex-1 max-w-2xl w-full mx-auto px-4 py-4 flex flex-col space-y-4">
     
+    <!-- View Switcher Tabs (Record vs Viewer) -->
+    <div class="flex items-center p-1 rounded-2xl bg-zinc-900/90 border border-zinc-800 text-xs shadow-inner">
+      <button id="tabBtnMeeting" type="button" class="flex-1 py-2 px-3 rounded-xl font-semibold transition flex items-center justify-center gap-2 bg-zinc-800 text-zinc-100 shadow-sm">
+        <i data-lucide="video" class="w-4 h-4 text-emerald-400"></i>
+        <span>🎥 会議記録</span>
+      </button>
+      <button id="tabBtnViewer" type="button" class="flex-1 py-2 px-3 rounded-xl font-semibold text-zinc-400 hover:text-zinc-200 transition flex items-center justify-center gap-2">
+        <i data-lucide="folder-search" class="w-4 h-4 text-cyan-400"></i>
+        <span>📂 会議ビューア</span>
+      </button>
+    </div>
+
     <!-- ================= VIEW: MEETING & SCREEN RECORDER ================= -->
     <div id="viewMeeting" class="flex-1 flex flex-col space-y-4">
       
@@ -349,6 +361,12 @@
           </div>
         </div>
 
+        <!-- Open in Viewer Primary Action -->
+        <button id="btnOpenInViewer" type="button" class="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-400 hover:from-cyan-400 hover:to-emerald-300 text-zinc-950 text-xs font-bold shadow-lg shadow-cyan-950/40 active:scale-98 transition flex items-center justify-center gap-2">
+          <i data-lucide="play-circle" class="w-4 h-4"></i>
+          <span>👀 この会議をビューアで開く (タイムライン & 再生)</span>
+        </button>
+
         <!-- Download & Obsidian Actions -->
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
           <button id="btnDownloadZip" type="button" class="py-2.5 px-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-zinc-950 text-xs font-semibold shadow-md active:scale-98 transition flex items-center justify-center gap-1.5">
@@ -442,7 +460,194 @@
       </div>
 
     </div>
+
+    <!-- ================= VIEW: MEETING VIEWER ================= -->
+    <div id="viewViewer" class="hidden flex-1 flex flex-col space-y-4">
+      
+      <!-- Meeting Selector & Toolbar -->
+      <div class="p-3.5 rounded-2xl bg-zinc-900/90 border border-zinc-800 space-y-2.5 shadow-xl">
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2 text-xs font-semibold text-zinc-200">
+            <i data-lucide="folder-search" class="w-4 h-4 text-cyan-400"></i>
+            <span>参照する会議を選択</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button id="btnViewerRefresh" type="button" class="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs transition" title="会議一覧を更新">
+              <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+            </button>
+            <button id="btnViewerLoadZip" type="button" class="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[11px] font-medium border border-zinc-700 flex items-center gap-1 transition" title="手元のZIPファイルを直接開く">
+              <i data-lucide="archive" class="w-3 h-3 text-cyan-400"></i>
+              <span>ZIPを開く</span>
+            </button>
+            <input type="file" id="viewerZipFileInput" accept=".zip" class="hidden">
+          </div>
+        </div>
+
+        <!-- Select Dropdown -->
+        <div class="flex items-center gap-2">
+          <select id="viewerMeetingSelect" class="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-zinc-200 focus:outline-none focus:border-cyan-500 font-mono text-xs truncate">
+            <option value="">-- 会議を選択してください --</option>
+          </select>
+        </div>
+
+        <!-- Active Meeting Badges -->
+        <div id="viewerMeetingMetaBar" class="hidden pt-2 border-t border-zinc-800/60 flex flex-wrap items-center justify-between gap-2 text-[11px] text-zinc-400 font-mono">
+          <span id="viewerMetaFolder" class="truncate text-cyan-300 font-semibold">YYYY-MM-DD_HHmmss</span>
+          <div class="flex items-center gap-2">
+            <span id="viewerMetaAudioBadge" class="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px]">MP3あり</span>
+            <span id="viewerMetaTranscriptBadge" class="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px]">文字起こし 0件</span>
+            <span id="viewerMetaImageBadge" class="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[10px]">スクショ 0枚</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Audio Player Floating / Sticky Card -->
+      <div id="viewerPlayerCard" class="sticky top-[58px] z-20 p-3.5 sm:p-4 rounded-2xl bg-zinc-950/95 border border-cyan-500/30 backdrop-blur shadow-2xl space-y-2.5">
+        <audio id="viewerAudio" preload="auto" class="hidden"></audio>
+
+        <!-- Row 1: Controls & Time & Speed -->
+        <div class="flex items-center justify-between gap-2">
+          <!-- Play/Pause & Skips -->
+          <div class="flex items-center gap-1.5">
+            <button id="viewerBtnSkipBack" type="button" class="p-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs transition" title="5秒戻る">
+              <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+            </button>
+            <button id="viewerBtnTogglePlay" type="button" class="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-500 to-emerald-400 hover:from-cyan-400 hover:to-emerald-300 text-zinc-950 flex items-center justify-center font-bold shadow-md shadow-cyan-950/40 active:scale-95 transition">
+              <i id="viewerPlayIcon" data-lucide="play" class="w-4 h-4 fill-current ml-0.5"></i>
+            </button>
+            <button id="viewerBtnSkipForward" type="button" class="p-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs transition" title="5秒進む">
+              <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+            </button>
+          </div>
+
+          <!-- Current / Total Time -->
+          <div class="font-mono text-xs sm:text-sm text-zinc-200 tracking-wider">
+            <span id="viewerCurrentTimeText" class="text-cyan-300 font-semibold">00:00</span>
+            <span class="text-zinc-600">/</span>
+            <span id="viewerTotalTimeText" class="text-zinc-400">00:00</span>
+          </div>
+
+          <!-- Speed Selector & Follow toggle -->
+          <div class="flex items-center gap-2">
+            <div class="flex items-center gap-1 bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1 text-[11px]">
+              <span class="text-zinc-400 text-[10px]">速度:</span>
+              <select id="viewerPlaybackRate" class="bg-transparent text-zinc-200 font-mono font-medium focus:outline-none cursor-pointer">
+                <option value="0.75">0.75x</option>
+                <option value="1.0" selected>1.0x</option>
+                <option value="1.25">1.25x</option>
+                <option value="1.5">1.5x</option>
+                <option value="1.75">1.75x</option>
+                <option value="2.0">2.0x</option>
+              </select>
+            </div>
+
+            <label class="hidden sm:flex items-center gap-1.5 text-[11px] text-zinc-400 cursor-pointer select-none" title="再生位置に合わせて自動スクロール">
+              <input type="checkbox" id="viewerAutoScrollCheck" checked class="rounded bg-zinc-800 border-zinc-700 text-cyan-500 focus:ring-0 w-3.5 h-3.5">
+              <span>追従</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Row 2: Seek Slider Bar -->
+        <div class="w-full flex items-center gap-2">
+          <input type="range" id="viewerSeekBar" min="0" max="100" value="0" step="0.1" class="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-cyan-400 focus:outline-none">
+        </div>
+      </div>
+
+      <!-- Timeline vs Readme Tab Switcher -->
+      <div class="flex items-center justify-between border-b border-zinc-800 pb-2">
+        <div class="flex items-center gap-1 bg-zinc-900 p-1 rounded-xl border border-zinc-800 text-xs">
+          <button id="viewerTabTimeline" type="button" class="py-1.5 px-3 rounded-lg font-medium bg-zinc-800 text-cyan-300 shadow-sm transition flex items-center gap-1.5">
+            <i data-lucide="list-video" class="w-3.5 h-3.5"></i>
+            <span>タイムライン</span>
+          </button>
+          <button id="viewerTabReadme" type="button" class="py-1.5 px-3 rounded-lg font-medium text-zinc-400 hover:text-zinc-200 transition flex items-center gap-1.5">
+            <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
+            <span>議事録 (README.md)</span>
+          </button>
+        </div>
+
+        <button id="viewerBtnEditTranscript" type="button" class="px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 text-[11px] transition flex items-center gap-1" title="文字起こしテキストの編集・貼り付け">
+          <i data-lucide="edit-3" class="w-3.5 h-3.5 text-emerald-400"></i>
+          <span>テキスト編集</span>
+        </button>
+      </div>
+
+      <!-- Content Panel 1: Integrated Timeline -->
+      <div id="viewerTimelinePanel" class="space-y-3 pb-8">
+        <div id="viewerTimelineLoading" class="hidden py-8 text-center text-xs text-zinc-400 space-y-2">
+          <div class="inline-block animate-spin rounded-full h-6 w-6 border-2 border-cyan-500 border-t-transparent"></div>
+          <p>会議データを読み込み中...</p>
+        </div>
+
+        <div id="viewerTimelineEmpty" class="py-12 text-center text-zinc-500 text-xs space-y-3 p-6 rounded-2xl bg-zinc-900/40 border border-zinc-800/60">
+          <div class="w-12 h-12 rounded-xl bg-zinc-800 text-zinc-400 flex items-center justify-center mx-auto">
+            <i data-lucide="clock" class="w-6 h-6"></i>
+          </div>
+          <div>
+            <p class="font-medium text-zinc-300">会議を選択するか、ZIPファイルを読み込んでください</p>
+            <p class="text-[11px] text-zinc-500 mt-1">タイムスタンプ文字起こし（05:30 あってるよ）とスクショ画像が時系列に並びます。</p>
+          </div>
+        </div>
+
+        <!-- Timeline List Container -->
+        <div id="viewerTimelineList" class="hidden space-y-2.5">
+          <!-- Dynamically populated timeline items -->
+        </div>
+      </div>
+
+      <!-- Content Panel 2: Readme Markdown -->
+      <div id="viewerReadmePanel" class="hidden p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800 text-xs text-zinc-300 space-y-3 whitespace-pre-wrap font-mono leading-relaxed max-h-[70vh] overflow-y-auto select-text">
+      </div>
+
+    </div>
   </main>
+
+  <!-- ================= IMAGE PREVIEW MODAL ================= -->
+  <div id="imageModal" class="fixed inset-0 z-50 bg-black/90 backdrop-blur-md hidden items-center justify-center p-2 sm:p-6 transition-opacity" onclick="closeImageModal()">
+    <div class="relative max-w-5xl w-full max-h-[95vh] flex flex-col items-center justify-center space-y-2" onclick="event.stopPropagation()">
+      <div class="w-full flex items-center justify-between text-zinc-300 px-2">
+        <span id="imageModalTitle" class="text-xs font-mono text-cyan-300 truncate">screenshot.jpg</span>
+        <button type="button" onclick="closeImageModal()" class="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <div class="relative w-full max-h-[85vh] rounded-2xl overflow-hidden bg-zinc-950 border border-zinc-800 flex items-center justify-center shadow-2xl">
+        <img id="imageModalImg" src="" alt="Screenshot" class="max-w-full max-h-[85vh] object-contain">
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= TRANSCRIPT EDIT / IMPORT MODAL ================= -->
+  <div id="transcriptModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-end sm:items-center justify-center p-0 sm:p-4 transition-opacity">
+    <div class="w-full max-w-lg bg-zinc-900 border-t sm:border border-zinc-800 rounded-t-3xl sm:rounded-3xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+      <div class="px-5 py-4 border-b border-zinc-800 flex items-center justify-between">
+        <h2 class="text-sm font-semibold text-zinc-100 flex items-center gap-2">
+          <i data-lucide="edit-3" class="w-4 h-4 text-emerald-400"></i> 文字起こしテキストの編集 / 貼り付け
+        </h2>
+        <button id="closeTranscriptModalBtn" class="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <div class="p-5 space-y-3 overflow-y-auto flex-1 text-xs">
+        <p class="text-zinc-400 leading-relaxed">
+          Whisper、Teams、Gemini等の文字起こしテキスト、またはJSONを貼り付けてください。<br>
+          <span class="font-mono text-cyan-300">05:30 あってるよ</span> や <span class="font-mono text-cyan-300">- **05:30** テキスト</span> のようなタイムスタンプ付き行を自動認識します。
+        </p>
+        <textarea id="transcriptEditTextArea" rows="12" placeholder="00:05 本日の定例ミーティングを始めます。&#10;01:20 来期のロードマップについてです。&#10;05:30 あってるよ" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-zinc-200 font-mono text-xs focus:outline-none focus:border-cyan-500 leading-relaxed resize-none"></textarea>
+        
+        <div class="flex items-center justify-between pt-2">
+          <span id="transcriptParsePreviewCount" class="text-[11px] text-zinc-500 font-mono">0 件のタイムスタンプを検知</span>
+          <div class="flex items-center gap-2">
+            <button id="btnApplyTranscript" type="button" class="py-2 px-4 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-bold text-xs shadow transition flex items-center gap-1.5">
+              <i data-lucide="check" class="w-4 h-4"></i>
+              <span>タイムラインに反映</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- ================= SETTINGS MODAL ================= -->
   <div id="settingsModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-end sm:items-center justify-center p-0 sm:p-4 transition-opacity">
@@ -725,6 +930,14 @@
     let isNativeMode = false;
     let nativeInfo = null;
     let lastSavedNativeMeetingPath = null;
+
+    // Meeting Viewer State Variables
+    let currentViewMode = 'meeting'; // 'meeting' | 'viewer'
+    let viewerMeetingsList = [];
+    let currentViewerMeeting = null;
+    let viewerMergedTimelineItems = [];
+    let viewerCurrentActiveIndex = -1;
+    let meetingLastTranscriptItems = [];
 
     // Config & Storage Keys
     const CONFIG_KEY = 'voice_reflection_config_v1';
@@ -1980,6 +2193,14 @@
         });
       }
 
+      if (meetingLastTranscriptItems && meetingLastTranscriptItems.length > 0) {
+        md += `\n---\n\n## 📝 タイムスタンプ文字起こし\n\n`;
+        meetingLastTranscriptItems.forEach(item => {
+          md += `- **${item.time}** ${item.text}\n`;
+        });
+        md += `\n`;
+      }
+
       return md;
     }
 
@@ -2212,6 +2433,17 @@
             readmeBase64,
             `docs(meeting): meeting summary & screenshots (${currentMeetingFolder})`
           );
+
+          if (meetingLastTranscriptItems && meetingLastTranscriptItems.length > 0) {
+            updateMeetingProgress(98, `${providerLabel}へ文字起こしを保存中...`, `00_Inbox/Meetings/${currentMeetingFolder}/transcript.json`);
+            const transcriptBase64 = utf8ToBase64(JSON.stringify(meetingLastTranscriptItems, null, 2));
+            const transcriptPath = `00_Inbox/Meetings/${currentMeetingFolder}/transcript.json`;
+            await commitBinaryFile(
+              transcriptPath,
+              transcriptBase64,
+              `feat(meeting): meeting timestamped transcript (${currentMeetingFolder})`
+            );
+          }
         } else {
           updateMeetingProgress(98, 'ローカル保存の準備完了！', '手元保存の準備が整いました');
         }
@@ -2246,6 +2478,21 @@
           if (repoLinkRow) repoLinkRow.classList.add('hidden');
         }
         lucide.createIcons();
+
+        // 直前の会議データをビューア用に保持（即時閲覧可能にする）
+        const audioBlobUrl = URL.createObjectURL(mp3Blob);
+        currentViewerMeeting = {
+          folder: currentMeetingFolder,
+          readme: readmeContent,
+          transcript: meetingLastTranscriptItems || [],
+          images: meetingScreenshots.map(sc => ({
+            name: sc.filename,
+            timeStr: sc.timeStr,
+            seconds: parseTimeToSeconds(sc.timeStr),
+            url: sc.previewUrl
+          })),
+          audioUrl: audioBlobUrl
+        };
 
         if (hasGitCredentials && provider !== 'local') {
           showToast('会議記録の全データ（MP3 & JPEG & ノート）を保存しました！', 'success');
@@ -2324,6 +2571,11 @@
         // 2. README.md
         if (meetingLastReadmeContent) {
           root.file('README.md', meetingLastReadmeContent);
+        }
+
+        // 2.5. transcript.json
+        if (meetingLastTranscriptItems && meetingLastTranscriptItems.length > 0) {
+          root.file('transcript.json', JSON.stringify(meetingLastTranscriptItems, null, 2));
         }
 
         // 3. images/
@@ -2488,6 +2740,7 @@
         const payload = {
           dirName: folderName,
           readmeContent: meetingLastReadmeContent || '',
+          transcriptJson: meetingLastTranscriptItems && meetingLastTranscriptItems.length > 0 ? JSON.stringify(meetingLastTranscriptItems, null, 2) : '',
           audioBase64: audioB64,
           audioFileName: 'meeting_audio.mp3',
           images: imgList
@@ -2608,6 +2861,717 @@
         if (btnSummary) btnSummary.disabled = false;
         if (loader) loader.classList.add('hidden');
       }
+    }
+
+    // ==========================================
+    // Meeting Viewer (UI, Timeline & Player)
+    // ==========================================
+
+    function switchViewMode(mode) {
+      currentViewMode = mode;
+      const viewMeeting = document.getElementById('viewMeeting');
+      const viewViewer = document.getElementById('viewViewer');
+      const tabBtnMeeting = document.getElementById('tabBtnMeeting');
+      const tabBtnViewer = document.getElementById('tabBtnViewer');
+
+      if (mode === 'viewer') {
+        viewMeeting.classList.add('hidden');
+        viewViewer.classList.remove('hidden');
+
+        tabBtnViewer.className = 'flex-1 py-2 px-3 rounded-xl font-semibold transition flex items-center justify-center gap-2 bg-zinc-800 text-cyan-300 shadow-sm';
+        tabBtnMeeting.className = 'flex-1 py-2 px-3 rounded-xl font-semibold text-zinc-400 hover:text-zinc-200 transition flex items-center justify-center gap-2';
+
+        if (viewerMeetingsList.length === 0) {
+          loadViewerMeetingsList();
+        }
+      } else {
+        viewViewer.classList.add('hidden');
+        viewMeeting.classList.remove('hidden');
+
+        const audio = document.getElementById('viewerAudio');
+        if (audio && !audio.paused) {
+          audio.pause();
+          updateViewerPlayButton(false);
+        }
+
+        tabBtnMeeting.className = 'flex-1 py-2 px-3 rounded-xl font-semibold transition flex items-center justify-center gap-2 bg-zinc-800 text-emerald-400 shadow-sm';
+        tabBtnViewer.className = 'flex-1 py-2 px-3 rounded-xl font-semibold text-zinc-400 hover:text-zinc-200 transition flex items-center justify-center gap-2';
+      }
+      lucide.createIcons();
+    }
+
+    async function openMeetingInViewer(targetFolder = null) {
+      switchViewMode('viewer');
+      const folderToOpen = targetFolder || currentMeetingFolder;
+      await loadViewerMeetingsList(folderToOpen);
+      if (folderToOpen) {
+        document.getElementById('viewerMeetingSelect').value = folderToOpen;
+        await loadViewerMeetingDetail(folderToOpen);
+      }
+    }
+
+    async function loadViewerMeetingsList(autoSelectFolder = null) {
+      const select = document.getElementById('viewerMeetingSelect');
+      select.innerHTML = '<option value="">会議一覧を読み込み中...</option>';
+
+      viewerMeetingsList = [];
+
+      try {
+        if (isNativeMode) {
+          const res = await fetch('/api/meetings');
+          const data = await res.json();
+          if (data.success && Array.isArray(data.meetings)) {
+            viewerMeetingsList = data.meetings;
+          }
+        } else {
+          const cfg = getConfig();
+          const provider = cfg.gitProvider || 'github';
+
+          if (provider === 'github' && cfg.githubToken && cfg.githubOwner && cfg.githubRepo) {
+            const url = `https://api.github.com/repos/${cfg.githubOwner}/${cfg.githubRepo}/contents/00_Inbox/Meetings?ref=${cfg.githubBranch || 'main'}`;
+            const res = await fetch(url, {
+              headers: {
+                'Authorization': `Bearer ${cfg.githubToken}`,
+                'Accept': 'application/vnd.github.v3+json'
+              }
+            });
+            if (res.ok) {
+              const items = await res.json();
+              if (Array.isArray(items)) {
+                viewerMeetingsList = items
+                  .filter(it => it.type === 'dir')
+                  .map(it => ({ folder: it.name, fullPath: it.path }))
+                  .sort((a, b) => b.folder.localeCompare(a.folder));
+              }
+            }
+          } else if (provider === 'gitlab' && cfg.gitlabToken && cfg.gitlabUrl && cfg.gitlabProjectId) {
+            const cleanBase = normalizeGitLabBaseUrl(cfg.gitlabUrl);
+            const url = `${cleanBase}/api/v4/projects/${cfg.gitlabProjectId}/repository/tree?path=00_Inbox/Meetings&ref=${cfg.gitlabBranch || 'main'}`;
+            const res = await fetch(url, {
+              headers: { 'PRIVATE-TOKEN': cfg.gitlabToken }
+            });
+            if (res.ok) {
+              const items = await res.json();
+              if (Array.isArray(items)) {
+                viewerMeetingsList = items
+                  .filter(it => it.type === 'tree')
+                  .map(it => ({ folder: it.name, fullPath: it.path }))
+                  .sort((a, b) => b.folder.localeCompare(a.folder));
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to list meetings:', err);
+      }
+
+      select.innerHTML = '';
+      const defaultOpt = document.createElement('option');
+      defaultOpt.value = '';
+      defaultOpt.innerText = viewerMeetingsList.length === 0 
+        ? '-- 会議が見つかりません（ZIPを開くか録音してください） --'
+        : `-- 会議を選択してください (${viewerMeetingsList.length}件) --`;
+      select.appendChild(defaultOpt);
+
+      viewerMeetingsList.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m.folder;
+        opt.innerText = `📅 ${m.folder}` + (m.imageCount ? ` (${m.imageCount}枚)` : '');
+        select.appendChild(opt);
+      });
+
+      if (autoSelectFolder) {
+        select.value = autoSelectFolder;
+      }
+    }
+
+    async function loadViewerMeetingDetail(folder) {
+      if (!folder) {
+        resetViewerState();
+        return;
+      }
+
+      showViewerLoading(true);
+
+      try {
+        if (isNativeMode) {
+          const res = await fetch(`/api/meetings/detail?folder=${encodeURIComponent(folder)}`);
+          const data = await res.json();
+          if (!data.success) throw new Error(data.error || '会議詳細の取得に失敗しました');
+
+          currentViewerMeeting = {
+            folder: folder,
+            readme: data.readme || '',
+            transcript: data.transcript || [],
+            images: data.images || [],
+            audioUrl: data.hasAudio ? data.audioUrl : null
+          };
+        } else {
+          const cfg = getConfig();
+          const provider = cfg.gitProvider || 'github';
+
+          let readmeText = '';
+          let transcriptObj = null;
+          let imagesList = [];
+          let audioUrl = null;
+
+          if (provider === 'github') {
+            const baseUrl = `https://api.github.com/repos/${cfg.githubOwner}/${cfg.githubRepo}/contents/00_Inbox/Meetings/${folder}`;
+            const headers = {
+              'Authorization': `Bearer ${cfg.githubToken}`,
+              'Accept': 'application/vnd.github.v3+json'
+            };
+
+            const res = await fetch(baseUrl, { headers });
+            if (res.ok) {
+              const files = await res.json();
+              for (const f of files) {
+                if (f.name === 'README.md' && f.download_url) {
+                  const r = await fetch(f.download_url);
+                  readmeText = await r.text();
+                } else if (f.name === 'transcript.json' && f.download_url) {
+                  const r = await fetch(f.download_url);
+                  try { transcriptObj = await r.json(); } catch (_) {}
+                } else if (f.name.toLowerCase().endsWith('.mp3')) {
+                  audioUrl = f.download_url;
+                }
+              }
+
+              const imgDirRes = await fetch(`${baseUrl}/images`, { headers });
+              if (imgDirRes.ok) {
+                const imgFiles = await imgDirRes.json();
+                imagesList = imgFiles.filter(i => i.name.match(/\.(jpg|jpeg|png)$/i)).map(i => {
+                  const timeMatch = i.name.match(/screen_(\d{2})(\d{2})(\d{2})\./);
+                  const timeStr = timeMatch ? `${timeMatch[1]}:${timeMatch[2]}:${timeMatch[3]}` : '00:00:00';
+                  return {
+                    name: i.name,
+                    timeStr: timeStr,
+                    seconds: parseTimeToSeconds(timeStr),
+                    url: i.download_url
+                  };
+                });
+              }
+            }
+          }
+
+          currentViewerMeeting = {
+            folder: folder,
+            readme: readmeText,
+            transcript: transcriptObj || [],
+            images: imagesList,
+            audioUrl: audioUrl
+          };
+        }
+
+        renderLoadedMeetingToViewer(currentViewerMeeting);
+
+      } catch (err) {
+        console.error('Failed to load meeting detail:', err);
+        showToast(`会議の読み込み失敗: ${err.message}`, 'error');
+        showViewerLoading(false);
+      }
+    }
+
+    async function handleZipFileUpload(file) {
+      if (!file) return;
+      showViewerLoading(true);
+      showToast('📦 ZIPファイルを展開・解析中...', 'info');
+
+      try {
+        const zip = await JSZip.loadAsync(file);
+        let folderName = file.name.replace(/\.zip$/i, '');
+        let readmeText = '';
+        let transcriptObj = null;
+        let audioBlobUrl = null;
+        let imagesList = [];
+
+        for (const relativePath in zip.files) {
+          const zipEntry = zip.files[relativePath];
+          if (zipEntry.dir) continue;
+
+          const fileName = relativePath.split('/').pop();
+          const lower = fileName.toLowerCase();
+
+          if (lower === 'readme.md') {
+            readmeText = await zipEntry.async('text');
+          } else if (lower === 'transcript.json') {
+            const txt = await zipEntry.async('text');
+            try { transcriptObj = JSON.parse(txt); } catch (_) {}
+          } else if (lower.endsWith('.mp3')) {
+            const blob = await zipEntry.async('blob');
+            audioBlobUrl = URL.createObjectURL(blob);
+          } else if (lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.png')) {
+            const blob = await zipEntry.async('blob');
+            const imgUrl = URL.createObjectURL(blob);
+            const timeMatch = fileName.match(/screen_(\d{2})(\d{2})(\d{2})\./);
+            const timeStr = timeMatch ? `${timeMatch[1]}:${timeMatch[2]}:${timeMatch[3]}` : '00:00:00';
+            imagesList.push({
+              name: fileName,
+              timeStr: timeStr,
+              seconds: parseTimeToSeconds(timeStr),
+              url: imgUrl
+            });
+          }
+        }
+
+        currentViewerMeeting = {
+          folder: folderName,
+          readme: readmeText,
+          transcript: transcriptObj || [],
+          images: imagesList,
+          audioUrl: audioBlobUrl
+        };
+
+        const select = document.getElementById('viewerMeetingSelect');
+        const opt = document.createElement('option');
+        opt.value = folderName;
+        opt.innerText = `📦 ${folderName} (ZIP)`;
+        select.prepend(opt);
+        select.value = folderName;
+
+        renderLoadedMeetingToViewer(currentViewerMeeting);
+        showToast('ZIPから会議データをロードしました！', 'success');
+
+      } catch (err) {
+        console.error('ZIP load error:', err);
+        showToast(`ZIP読み込みエラー: ${err.message}`, 'error');
+        showViewerLoading(false);
+      }
+    }
+
+    function renderLoadedMeetingToViewer(meeting) {
+      showViewerLoading(false);
+      if (!meeting) return;
+
+      const metaBar = document.getElementById('viewerMeetingMetaBar');
+      const metaFolder = document.getElementById('viewerMetaFolder');
+      const metaAudio = document.getElementById('viewerMetaAudioBadge');
+      const metaTranscript = document.getElementById('viewerMetaTranscriptBadge');
+      const metaImage = document.getElementById('viewerMetaImageBadge');
+
+      if (metaBar) metaBar.classList.remove('hidden');
+      if (metaFolder) metaFolder.innerText = meeting.folder;
+
+      let transcriptItems = [];
+      if (Array.isArray(meeting.transcript) && meeting.transcript.length > 0) {
+        transcriptItems = meeting.transcript.map(item => ({
+          time: item.time || formatSecondsToTimer(item.seconds || item.start || 0),
+          seconds: Number(item.seconds !== undefined ? item.seconds : (item.start || 0)),
+          text: item.text || ''
+        }));
+      } else if (meeting.readme) {
+        transcriptItems = parseTimestampedTranscriptText(meeting.readme);
+      }
+
+      if (metaAudio) {
+        metaAudio.innerText = meeting.audioUrl ? '🎵 MP3あり' : '❌ 音声なし';
+        metaAudio.className = meeting.audioUrl 
+          ? 'px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px]'
+          : 'px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-500 text-[10px]';
+      }
+      if (metaTranscript) {
+        metaTranscript.innerText = `文字起こし ${transcriptItems.length}件`;
+      }
+      if (metaImage) {
+        metaImage.innerText = `スクショ ${meeting.images.length}枚`;
+      }
+
+      setupViewerAudio(meeting.audioUrl);
+      renderViewerTimeline(transcriptItems, meeting.images);
+
+      const readmePanel = document.getElementById('viewerReadmePanel');
+      if (readmePanel) {
+        readmePanel.innerText = meeting.readme || '議事録 (README.md) はありません';
+      }
+
+      const editArea = document.getElementById('transcriptEditTextArea');
+      if (editArea) {
+        editArea.value = transcriptItems.map(it => `${it.time} ${it.text}`).join('\n');
+        updateTranscriptParsePreviewCount();
+      }
+
+      lucide.createIcons();
+    }
+
+    function renderViewerTimeline(transcriptItems, imageItems) {
+      const emptyEl = document.getElementById('viewerTimelineEmpty');
+      const listEl = document.getElementById('viewerTimelineList');
+
+      if (!listEl) return;
+      listEl.innerHTML = '';
+
+      viewerMergedTimelineItems = [];
+
+      transcriptItems.forEach(t => {
+        viewerMergedTimelineItems.push({
+          type: 'transcript',
+          seconds: t.seconds,
+          time: t.time,
+          text: t.text
+        });
+      });
+
+      imageItems.forEach(img => {
+        viewerMergedTimelineItems.push({
+          type: 'image',
+          seconds: img.seconds,
+          time: img.timeStr,
+          url: img.url,
+          filename: img.name
+        });
+      });
+
+      viewerMergedTimelineItems.sort((a, b) => a.seconds - b.seconds);
+
+      if (viewerMergedTimelineItems.length === 0) {
+        if (emptyEl) emptyEl.classList.remove('hidden');
+        listEl.classList.add('hidden');
+        return;
+      }
+
+      if (emptyEl) emptyEl.classList.add('hidden');
+      listEl.classList.remove('hidden');
+
+      viewerMergedTimelineItems.forEach((item, idx) => {
+        const row = document.createElement('div');
+        row.id = `viewer_item_${idx}`;
+
+        if (item.type === 'transcript') {
+          row.className = 'timeline-item flex items-start gap-2.5 p-2.5 rounded-xl bg-zinc-900/70 hover:bg-zinc-850/80 border border-zinc-800/80 transition group';
+          row.dataset.seconds = item.seconds;
+          row.dataset.index = idx;
+
+          row.innerHTML = `
+            <button type="button" onclick="seekViewerAudio(${item.seconds})" class="btn-seek shrink-0 font-mono text-[11px] px-2 py-1 rounded-lg bg-cyan-950/60 hover:bg-cyan-500 text-cyan-300 hover:text-zinc-950 font-bold border border-cyan-500/30 transition flex items-center gap-1 cursor-pointer active:scale-95" title="${item.time} から再生">
+              <i data-lucide="play" class="w-3 h-3 fill-current"></i>
+              <span>${item.time}</span>
+            </button>
+            <div class="flex-1 text-xs text-zinc-200 pt-0.5 leading-relaxed select-text font-sans">
+              ${escapeHtml(item.text)}
+            </div>
+          `;
+        } else if (item.type === 'image') {
+          row.className = 'timeline-item flex items-start gap-2.5 p-2.5 rounded-xl bg-zinc-950/80 hover:bg-zinc-900/80 border border-amber-500/20 transition group';
+          row.dataset.seconds = item.seconds;
+          row.dataset.index = idx;
+
+          row.innerHTML = `
+            <button type="button" onclick="seekViewerAudio(${item.seconds})" class="btn-seek shrink-0 font-mono text-[11px] px-2 py-1 rounded-lg bg-amber-950/60 hover:bg-amber-500 text-amber-300 hover:text-zinc-950 font-bold border border-amber-500/30 transition flex items-center gap-1 cursor-pointer active:scale-95" title="${item.time} から再生">
+              <i data-lucide="camera" class="w-3 h-3 fill-current"></i>
+              <span>${item.time}</span>
+            </button>
+            <div class="flex-1 space-y-1.5">
+              <div class="flex items-center gap-2 text-[10px] text-zinc-400">
+                <span class="px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-300 font-mono">${item.filename}</span>
+                <span>(クリックで拡大)</span>
+              </div>
+              <div class="max-w-sm sm:max-w-md aspect-video rounded-xl overflow-hidden bg-black border border-zinc-800 cursor-pointer hover:border-amber-400 hover:shadow-lg transition" onclick="openImageModal('${item.url}', '${item.filename}')">
+                <img src="${item.url}" alt="${item.filename}" class="w-full h-full object-cover">
+              </div>
+            </div>
+          `;
+        }
+
+        listEl.appendChild(row);
+      });
+
+      lucide.createIcons();
+    }
+
+    function setupViewerAudio(audioUrl) {
+      const audio = document.getElementById('viewerAudio');
+      if (!audio) return;
+
+      audio.pause();
+      updateViewerPlayButton(false);
+      audio.currentTime = 0;
+
+      if (!audioUrl) {
+        audio.removeAttribute('src');
+        document.getElementById('viewerCurrentTimeText').innerText = '00:00';
+        document.getElementById('viewerTotalTimeText').innerText = '00:00';
+        document.getElementById('viewerSeekBar').value = 0;
+        return;
+      }
+
+      audio.src = audioUrl;
+      audio.playbackRate = parseFloat(document.getElementById('viewerPlaybackRate').value || 1.0);
+
+      audio.onloadedmetadata = () => {
+        document.getElementById('viewerTotalTimeText').innerText = formatSecondsToTimer(Math.floor(audio.duration));
+      };
+
+      audio.ontimeupdate = () => {
+        const cur = audio.currentTime;
+        const dur = audio.duration || 1;
+
+        const pct = (cur / dur) * 100;
+        document.getElementById('viewerSeekBar').value = pct;
+        document.getElementById('viewerCurrentTimeText').innerText = formatSecondsToTimer(Math.floor(cur));
+
+        updateTimelineActiveHighlight(cur);
+      };
+
+      audio.onended = () => {
+        updateViewerPlayButton(false);
+      };
+    }
+
+    function toggleViewerAudioPlay() {
+      const audio = document.getElementById('viewerAudio');
+      if (!audio || !audio.src) {
+        showToast('音声ファイルがありません', 'info');
+        return;
+      }
+
+      if (audio.paused) {
+        audio.play().then(() => {
+          updateViewerPlayButton(true);
+        }).catch(err => {
+          console.warn('Audio play error:', err);
+          showToast(`再生エラー: ${err.message}`, 'error');
+        });
+      } else {
+        audio.pause();
+        updateViewerPlayButton(false);
+      }
+    }
+
+    function updateViewerPlayButton(isPlaying) {
+      const icon = document.getElementById('viewerPlayIcon');
+      if (!icon) return;
+      if (isPlaying) {
+        icon.setAttribute('data-lucide', 'pause');
+        icon.className = 'w-4 h-4 fill-current ml-0';
+      } else {
+        icon.setAttribute('data-lucide', 'play');
+        icon.className = 'w-4 h-4 fill-current ml-0.5';
+      }
+      lucide.createIcons();
+    }
+
+    function seekViewerAudio(seconds) {
+      const audio = document.getElementById('viewerAudio');
+      if (!audio || !audio.src) {
+        showToast(`シーク先: ${formatSecondsToTimer(seconds)}（音声ファイルなし）`, 'info');
+        return;
+      }
+
+      audio.currentTime = seconds;
+      if (audio.paused) {
+        audio.play().then(() => {
+          updateViewerPlayButton(true);
+        }).catch(e => console.warn(e));
+      }
+      updateTimelineActiveHighlight(seconds);
+    }
+
+    function skipViewerAudio(offsetSec) {
+      const audio = document.getElementById('viewerAudio');
+      if (!audio || !audio.src) return;
+      audio.currentTime = Math.max(0, Math.min(audio.duration || 999999, audio.currentTime + offsetSec));
+    }
+
+    function updateTimelineActiveHighlight(currentSec) {
+      if (viewerMergedTimelineItems.length === 0) return;
+
+      let activeIdx = -1;
+      for (let i = 0; i < viewerMergedTimelineItems.length; i++) {
+        if (viewerMergedTimelineItems[i].seconds <= currentSec) {
+          activeIdx = i;
+        } else {
+          break;
+        }
+      }
+
+      if (activeIdx !== viewerCurrentActiveIndex) {
+        if (viewerCurrentActiveIndex !== -1) {
+          const prevEl = document.getElementById(`viewer_item_${viewerCurrentActiveIndex}`);
+          if (prevEl) {
+            prevEl.classList.remove('bg-cyan-950/40', 'border-cyan-500/80', 'ring-1', 'ring-cyan-500/50', 'shadow-lg');
+          }
+        }
+
+        viewerCurrentActiveIndex = activeIdx;
+        if (activeIdx !== -1) {
+          const currEl = document.getElementById(`viewer_item_${activeIdx}`);
+          if (currEl) {
+            currEl.classList.add('bg-cyan-950/40', 'border-cyan-500/80', 'ring-1', 'ring-cyan-500/50', 'shadow-lg');
+
+            const followCheck = document.getElementById('viewerAutoScrollCheck');
+            if (followCheck && followCheck.checked) {
+              currEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+          }
+        }
+      }
+    }
+
+    function parseTimestampedTranscriptText(raw) {
+      if (!raw || typeof raw !== 'string') return [];
+      const lines = raw.split(/\r?\n/);
+      const items = [];
+
+      const regex = /^(?:[-*#>\s]*)(?:\[|\*\*)?(\d{1,2}:\d{2}(?::\d{2})?)(?:\]|\*\*)?\s*[:：\-]?\s*(.+)$/;
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        const match = trimmed.match(regex);
+        if (match) {
+          const timeStr = match[1];
+          const text = match[2].trim();
+          const sec = parseTimeToSeconds(timeStr);
+          items.push({
+            time: timeStr,
+            seconds: sec,
+            text: text
+          });
+        }
+      }
+      return items;
+    }
+
+    function parseTimeToSeconds(timeStr) {
+      if (!timeStr) return 0;
+      const parts = timeStr.split(':').map(Number);
+      if (parts.length === 2) {
+        return parts[0] * 60 + parts[1];
+      } else if (parts.length === 3) {
+        return parts[0] * 3600 + parts[1] * 60 + parts[2];
+      }
+      return 0;
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function openImageModal(imgUrl, title) {
+      const modal = document.getElementById('imageModal');
+      const img = document.getElementById('imageModalImg');
+      const titleEl = document.getElementById('imageModalTitle');
+      if (!modal || !img) return;
+
+      img.src = imgUrl;
+      if (titleEl) titleEl.innerText = title || 'スクリーンショット';
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeImageModal() {
+      const modal = document.getElementById('imageModal');
+      if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      }
+    }
+
+    function openTranscriptModal() {
+      const modal = document.getElementById('transcriptModal');
+      if (modal) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        updateTranscriptParsePreviewCount();
+      }
+    }
+
+    function closeTranscriptModal() {
+      const modal = document.getElementById('transcriptModal');
+      if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      }
+    }
+
+    function updateTranscriptParsePreviewCount() {
+      const area = document.getElementById('transcriptEditTextArea');
+      const countLabel = document.getElementById('transcriptParsePreviewCount');
+      if (!area || !countLabel) return;
+      const items = parseTimestampedTranscriptText(area.value);
+      countLabel.innerText = `${items.length} 件のタイムスタンプを検知`;
+    }
+
+    async function applyTranscriptEditText() {
+      const area = document.getElementById('transcriptEditTextArea');
+      if (!area) return;
+
+      const raw = area.value;
+      const items = parseTimestampedTranscriptText(raw);
+
+      if (items.length === 0 && raw.trim().length > 0) {
+        alert('タイムスタンプ（例: 05:30 あってるよ）が見つかりませんでした。先頭に「05:30」などの時刻を記載してください。');
+        return;
+      }
+
+      if (!currentViewerMeeting) {
+        currentViewerMeeting = {
+          folder: 'custom_' + Date.now(),
+          readme: '',
+          transcript: items,
+          images: [],
+          audioUrl: null
+        };
+      } else {
+        currentViewerMeeting.transcript = items;
+      }
+
+      if (isNativeMode && currentViewerMeeting.folder && !currentViewerMeeting.folder.startsWith('custom_')) {
+        fetch('/api/save/transcript', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            folder: currentViewerMeeting.folder,
+            transcriptJson: JSON.stringify(items, null, 2)
+          })
+        }).then(r => r.json()).then(d => {
+          if (d.success) {
+            showToast('文字起こしデータをPCに保存しました', 'success');
+          }
+        }).catch(err => console.warn('Failed to save transcript:', err));
+      }
+
+      renderViewerTimeline(items, currentViewerMeeting.images || []);
+      closeTranscriptModal();
+      showToast(`${items.length}件の文字起こしをタイムラインに反映しました！`, 'success');
+    }
+
+    function showViewerLoading(isLoading) {
+      const loader = document.getElementById('viewerTimelineLoading');
+      const empty = document.getElementById('viewerTimelineEmpty');
+      const list = document.getElementById('viewerTimelineList');
+
+      if (isLoading) {
+        if (loader) loader.classList.remove('hidden');
+        if (empty) empty.classList.add('hidden');
+        if (list) list.classList.add('hidden');
+      } else {
+        if (loader) loader.classList.add('hidden');
+      }
+    }
+
+    function resetViewerState() {
+      currentViewerMeeting = null;
+      viewerMergedTimelineItems = [];
+      viewerCurrentActiveIndex = -1;
+      const audio = document.getElementById('viewerAudio');
+      if (audio) {
+        audio.pause();
+        audio.removeAttribute('src');
+      }
+      document.getElementById('viewerTimelineList').innerHTML = '';
+      document.getElementById('viewerTimelineList').classList.add('hidden');
+      document.getElementById('viewerTimelineEmpty').classList.remove('hidden');
+      document.getElementById('viewerMeetingMetaBar').classList.add('hidden');
+      document.getElementById('viewerCurrentTimeText').innerText = '00:00';
+      document.getElementById('viewerTotalTimeText').innerText = '00:00';
+      document.getElementById('viewerSeekBar').value = 0;
     }
 
     // Event Listeners
@@ -2731,6 +3695,80 @@
         if (pendingStartRecordOnModal) {
           pendingStartRecordOnModal = false;
           startMeetingRecording();
+        }
+      });
+
+      // View Switcher (Meeting Record vs Viewer)
+      document.getElementById('tabBtnMeeting').addEventListener('click', () => switchViewMode('meeting'));
+      document.getElementById('tabBtnViewer').addEventListener('click', () => switchViewMode('viewer'));
+      const btnOpenInViewer = document.getElementById('btnOpenInViewer');
+      if (btnOpenInViewer) btnOpenInViewer.addEventListener('click', () => openMeetingInViewer());
+
+      // Viewer Controls
+      document.getElementById('viewerMeetingSelect').addEventListener('change', (e) => {
+        loadViewerMeetingDetail(e.target.value);
+      });
+      document.getElementById('btnViewerRefresh').addEventListener('click', () => {
+        loadViewerMeetingsList(document.getElementById('viewerMeetingSelect').value);
+      });
+      document.getElementById('btnViewerLoadZip').addEventListener('click', () => {
+        document.getElementById('viewerZipFileInput').click();
+      });
+      document.getElementById('viewerZipFileInput').addEventListener('change', (e) => {
+        const file = e.target.files?.[0];
+        if (file) handleZipFileUpload(file);
+      });
+
+      // Audio Player Controls
+      document.getElementById('viewerBtnTogglePlay').addEventListener('click', toggleViewerAudioPlay);
+      document.getElementById('viewerBtnSkipBack').addEventListener('click', () => skipViewerAudio(-5));
+      document.getElementById('viewerBtnSkipForward').addEventListener('click', () => skipViewerAudio(5));
+      document.getElementById('viewerPlaybackRate').addEventListener('change', (e) => {
+        const audio = document.getElementById('viewerAudio');
+        if (audio) audio.playbackRate = parseFloat(e.target.value);
+      });
+      document.getElementById('viewerSeekBar').addEventListener('input', (e) => {
+        const audio = document.getElementById('viewerAudio');
+        if (audio && audio.duration) {
+          audio.currentTime = (parseFloat(e.target.value) / 100) * audio.duration;
+        }
+      });
+
+      // Sub-Tabs in Viewer (Timeline vs Readme)
+      document.getElementById('viewerTabTimeline').addEventListener('click', () => {
+        document.getElementById('viewerTimelinePanel').classList.remove('hidden');
+        document.getElementById('viewerReadmePanel').classList.add('hidden');
+        document.getElementById('viewerTabTimeline').className = 'py-1.5 px-3 rounded-lg font-medium bg-zinc-800 text-cyan-300 shadow-sm transition flex items-center gap-1.5';
+        document.getElementById('viewerTabReadme').className = 'py-1.5 px-3 rounded-lg font-medium text-zinc-400 hover:text-zinc-200 transition flex items-center gap-1.5';
+      });
+      document.getElementById('viewerTabReadme').addEventListener('click', () => {
+        document.getElementById('viewerTimelinePanel').classList.add('hidden');
+        document.getElementById('viewerReadmePanel').classList.remove('hidden');
+        document.getElementById('viewerTabReadme').className = 'py-1.5 px-3 rounded-lg font-medium bg-zinc-800 text-cyan-300 shadow-sm transition flex items-center gap-1.5';
+        document.getElementById('viewerTabTimeline').className = 'py-1.5 px-3 rounded-lg font-medium text-zinc-400 hover:text-zinc-200 transition flex items-center gap-1.5';
+      });
+
+      // Transcript Edit Modal
+      document.getElementById('viewerBtnEditTranscript').addEventListener('click', openTranscriptModal);
+      document.getElementById('closeTranscriptModalBtn').addEventListener('click', closeTranscriptModal);
+      document.getElementById('btnApplyTranscript').addEventListener('click', applyTranscriptEditText);
+      document.getElementById('transcriptEditTextArea').addEventListener('input', updateTranscriptParsePreviewCount);
+
+      // Keyboard Shortcuts for Viewer Audio (Space = toggle play)
+      window.addEventListener('keydown', (e) => {
+        if (currentViewMode !== 'viewer') return;
+        const tag = e.target.tagName.toLowerCase();
+        if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+
+        if (e.code === 'Space') {
+          e.preventDefault();
+          toggleViewerAudioPlay();
+        } else if (e.code === 'ArrowLeft') {
+          e.preventDefault();
+          skipViewerAudio(-5);
+        } else if (e.code === 'ArrowRight') {
+          e.preventDefault();
+          skipViewerAudio(5);
         }
       });
     });

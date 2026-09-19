@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 
@@ -29,6 +30,10 @@ func (h *APIHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/ai/claude", h.handleClaude)
 	mux.HandleFunc("/api/ai/meeting-summary", h.handleMeetingSummary)
 	mux.HandleFunc("/api/save/meeting", h.handleSaveMeeting)
+	mux.HandleFunc("/api/save/transcript", h.handleSaveTranscript)
+	mux.HandleFunc("/api/meetings", h.handleListMeetings)
+	mux.HandleFunc("/api/meetings/detail", h.handleMeetingDetail)
+	mux.HandleFunc("/api/meetings/file", h.handleMeetingFile)
 	mux.HandleFunc("/api/open-folder", h.handleOpenFolder)
 	mux.HandleFunc("/api/config", h.handleConfig)
 }
@@ -217,12 +222,13 @@ type SaveImageItem struct {
 }
 
 type SaveMeetingRequest struct {
-	DirName       string          `json:"dirName"`
-	FolderPath    string          `json:"folderPath,omitempty"`
-	ReadmeContent string          `json:"readmeContent"`
-	AudioBase64   string          `json:"audioBase64,omitempty"`
-	AudioFileName string          `json:"audioFileName,omitempty"`
-	Images        []SaveImageItem `json:"images,omitempty"`
+	DirName        string          `json:"dirName"`
+	FolderPath     string          `json:"folderPath,omitempty"`
+	ReadmeContent  string          `json:"readmeContent"`
+	TranscriptJSON string          `json:"transcriptJson,omitempty"`
+	AudioBase64    string          `json:"audioBase64,omitempty"`
+	AudioFileName  string          `json:"audioFileName,omitempty"`
+	Images         []SaveImageItem `json:"images,omitempty"`
 }
 
 type SaveMeetingResponse struct {
@@ -280,6 +286,14 @@ func (h *APIHandler) handleSaveMeeting(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		fileCount++
+	}
+
+	// 1.5. transcript.json の保存
+	if req.TranscriptJSON != "" {
+		transcriptPath := filepath.Join(targetDir, "transcript.json")
+		if err := os.WriteFile(transcriptPath, []byte(req.TranscriptJSON), 0644); err == nil {
+			fileCount++
+		}
 	}
 
 	// 2. 音声ファイル（MP3）の保存
@@ -474,4 +488,344 @@ func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(data)
 }
+
+// 会議一覧アイテム
+type MeetingListItem struct {
+	Folder        string `json:"folder"`
+	FullPath      string `json:"fullPath"`
+	HasAudio      bool   `json:"hasAudio"`
+	HasTranscript bool   `json:"hasTranscript"`
+	HasReadme     bool   `json:"hasReadme"`
+	ImageCount    int    `json:"imageCount"`
+	ModTime       string `json:"modTime"`
+}
+
+type ListMeetingsResponse struct {
+	Success  bool              `json:"success"`
+	BaseDir  string            `json:"baseDir"`
+	Meetings []MeetingListItem `json:"meetings"`
+	Error    string            `json:"error,omitempty"`
+}
+
+func (h *APIHandler) handleListMeetings(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	cfg := config.GetConfig()
+	dirsToScan := []string{cfg.SaveDir}
+
+	// personal-vault 内の 00_Inbox/Meetings も探索
+	vaultCandidates := []string{
+		"../personal-vault/00_Inbox/Meetings",
+		"../../personal-vault/00_Inbox/Meetings",
+		filepath.Join(os.Getenv("HOME"), "work", "personal-vault", "00_Inbox", "Meetings"),
+		filepath.Join(os.Getenv("USERPROFILE"), "work", "personal-vault", "00_Inbox", "Meetings"),
+	}
+	for _, vc := range vaultCandidates {
+		if fi, err := os.Stat(vc); err == nil && fi.IsDir() {
+			absVC, _ := filepath.Abs(vc)
+			dirsToScan = append(dirsToScan, absVC)
+			break
+		}
+	}
+
+	seenFolders := make(map[string]bool)
+	var meetings []MeetingListItem
+
+	for _, dir := range dirsToScan {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
+			folderName := entry.Name()
+			if seenFolders[folderName] {
+				continue
+			}
+
+			subDirPath := filepath.Join(dir, folderName)
+			item := MeetingListItem{
+				Folder:   folderName,
+				FullPath: subDirPath,
+			}
+
+			if fi, err := entry.Info(); err == nil {
+				item.ModTime = fi.ModTime().Format(time.RFC3339)
+			}
+
+			// 音声ファイルの確認
+			audioCandidates := []string{"meeting_audio.mp3", "audio.mp3", "audio.webm"}
+			for _, a := range audioCandidates {
+				if _, err := os.Stat(filepath.Join(subDirPath, a)); err == nil {
+					item.HasAudio = true
+					break
+				}
+			}
+
+			// README.md の確認
+			if _, err := os.Stat(filepath.Join(subDirPath, "README.md")); err == nil {
+				item.HasReadme = true
+			}
+
+			// transcript.json の確認
+			if _, err := os.Stat(filepath.Join(subDirPath, "transcript.json")); err == nil {
+				item.HasTranscript = true
+			}
+
+			// 画像ファイル数の確認
+			imagesDir := filepath.Join(subDirPath, "images")
+			if imgEntries, err := os.ReadDir(imagesDir); err == nil {
+				count := 0
+				for _, ie := range imgEntries {
+					if !ie.IsDir() {
+						lower := strings.ToLower(ie.Name())
+						if strings.HasSuffix(lower, ".jpg") || strings.HasSuffix(lower, ".jpeg") || strings.HasSuffix(lower, ".png") {
+							count++
+						}
+					}
+				}
+				item.ImageCount = count
+			}
+
+			seenFolders[folderName] = true
+			meetings = append(meetings, item)
+		}
+	}
+
+	// フォルダ名（日付形式）で新しい順にソート
+	sort.Slice(meetings, func(i, j int) bool {
+		return meetings[i].Folder > meetings[j].Folder
+	})
+
+	writeJSON(w, http.StatusOK, ListMeetingsResponse{
+		Success:  true,
+		BaseDir:  cfg.SaveDir,
+		Meetings: meetings,
+	})
+}
+
+// 会議詳細リクエスト/レスポンス
+type MeetingImageInfo struct {
+	Name    string `json:"name"`
+	Path    string `json:"path"`
+	TimeStr string `json:"timeStr"`
+	Seconds int    `json:"seconds"`
+	URL     string `json:"url"`
+}
+
+type MeetingDetailResponse struct {
+	Success    bool               `json:"success"`
+	Folder     string             `json:"folder"`
+	Readme     string             `json:"readme"`
+	Transcript interface{}        `json:"transcript"`
+	Images     []MeetingImageInfo `json:"images"`
+	HasAudio   bool               `json:"hasAudio"`
+	AudioURL   string             `json:"audioUrl"`
+	Error      string             `json:"error,omitempty"`
+}
+
+func (h *APIHandler) handleMeetingDetail(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	folder := strings.TrimSpace(r.URL.Query().Get("folder"))
+	if folder == "" || strings.Contains(folder, "..") || strings.Contains(folder, "/") || strings.Contains(folder, "\\") {
+		writeJSON(w, http.StatusBadRequest, MeetingDetailResponse{
+			Success: false,
+			Error:   "Invalid folder parameter",
+		})
+		return
+	}
+
+	targetDir := findMeetingDir(folder)
+	if targetDir == "" {
+		writeJSON(w, http.StatusNotFound, MeetingDetailResponse{
+			Success: false,
+			Error:   fmt.Sprintf("Folder not found: %s", folder),
+		})
+		return
+	}
+
+	resp := MeetingDetailResponse{
+		Success: true,
+		Folder:  folder,
+		Images:  []MeetingImageInfo{},
+	}
+
+	// 1. README.md の読み込み
+	readmePath := filepath.Join(targetDir, "README.md")
+	if data, err := os.ReadFile(readmePath); err == nil {
+		resp.Readme = string(data)
+	}
+
+	// 2. transcript.json の読み込み
+	transcriptPath := filepath.Join(targetDir, "transcript.json")
+	if data, err := os.ReadFile(transcriptPath); err == nil {
+		var transcriptObj interface{}
+		if err := json.Unmarshal(data, &transcriptObj); err == nil {
+			resp.Transcript = transcriptObj
+		}
+	}
+
+	// 3. 画像ファイル一覧の取得
+	imagesDir := filepath.Join(targetDir, "images")
+	if imgEntries, err := os.ReadDir(imagesDir); err == nil {
+		for _, ie := range imgEntries {
+			if !ie.IsDir() {
+				lower := strings.ToLower(ie.Name())
+				if strings.HasSuffix(lower, ".jpg") || strings.HasSuffix(lower, ".jpeg") || strings.HasSuffix(lower, ".png") {
+					name := ie.Name()
+					imgInfo := MeetingImageInfo{
+						Name: name,
+						Path: filepath.Join("images", name),
+						URL:  fmt.Sprintf("/api/meetings/file?folder=%s&file=%s", folder, filepath.Join("images", name)),
+					}
+
+					// ファイル名から時刻推測 (例: screen_150530.jpg -> 15:05:30)
+					if strings.HasPrefix(name, "screen_") {
+						parts := strings.TrimPrefix(name, "screen_")
+						parts = strings.TrimSuffix(parts, filepath.Ext(parts))
+						if len(parts) >= 6 {
+							h := parts[0:2]
+							m := parts[2:4]
+							s := parts[4:6]
+							imgInfo.TimeStr = fmt.Sprintf("%s:%s:%s", h, m, s)
+						}
+					}
+					resp.Images = append(resp.Images, imgInfo)
+				}
+			}
+		}
+	}
+
+	// 4. 音声ファイルの確認
+	audioCandidates := []string{"meeting_audio.mp3", "audio.mp3", "audio.webm"}
+	for _, a := range audioCandidates {
+		if _, err := os.Stat(filepath.Join(targetDir, a)); err == nil {
+			resp.HasAudio = true
+			resp.AudioURL = fmt.Sprintf("/api/meetings/file?folder=%s&file=%s", folder, a)
+			break
+		}
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// ファイルストリーミング（MP3音声 Rangeリクエスト対応、画像配信）
+func (h *APIHandler) handleMeetingFile(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	folder := strings.TrimSpace(r.URL.Query().Get("folder"))
+	file := strings.TrimSpace(r.URL.Query().Get("file"))
+
+	if folder == "" || file == "" || strings.Contains(folder, "..") || strings.Contains(file, "..") {
+		http.Error(w, "Invalid parameter", http.StatusBadRequest)
+		return
+	}
+
+	targetDir := findMeetingDir(folder)
+	if targetDir == "" {
+		http.Error(w, "Folder not found", http.StatusNotFound)
+		return
+	}
+
+	absFilePath := filepath.Join(targetDir, filepath.Clean(file))
+	if !strings.HasPrefix(absFilePath, targetDir) {
+		http.Error(w, "Access denied", http.StatusForbidden)
+		return
+	}
+
+	if _, err := os.Stat(absFilePath); err != nil {
+		http.Error(w, "File not found", http.StatusNotFound)
+		return
+	}
+
+	// http.ServeFile は Range リクエストや Content-Type を自動処理
+	http.ServeFile(w, r, absFilePath)
+}
+
+// transcript.json 保存リクエスト
+type SaveTranscriptRequest struct {
+	Folder         string `json:"folder"`
+	TranscriptJSON string `json:"transcriptJson"`
+}
+
+func (h *APIHandler) handleSaveTranscript(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req SaveTranscriptRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"error":   "Invalid JSON: " + err.Error(),
+		})
+		return
+	}
+
+	if req.Folder == "" || strings.Contains(req.Folder, "..") {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"error":   "Invalid folder",
+		})
+		return
+	}
+
+	targetDir := findMeetingDir(req.Folder)
+	if targetDir == "" {
+		writeJSON(w, http.StatusNotFound, map[string]interface{}{
+			"success": false,
+			"error":   "Folder not found",
+		})
+		return
+	}
+
+	transcriptPath := filepath.Join(targetDir, "transcript.json")
+	if err := os.WriteFile(transcriptPath, []byte(req.TranscriptJSON), 0644); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"error":   "Save failed: " + err.Error(),
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"path":    transcriptPath,
+	})
+}
+
+// フォルダ探索ヘルパー
+func findMeetingDir(folder string) string {
+	cfg := config.GetConfig()
+	candidates := []string{
+		filepath.Join(cfg.SaveDir, folder),
+		filepath.Join("../personal-vault/00_Inbox/Meetings", folder),
+		filepath.Join("../../personal-vault/00_Inbox/Meetings", folder),
+		filepath.Join(os.Getenv("HOME"), "work", "personal-vault", "00_Inbox", "Meetings", folder),
+		filepath.Join(os.Getenv("USERPROFILE"), "work", "personal-vault", "00_Inbox", "Meetings", folder),
+	}
+
+	for _, c := range candidates {
+		if fi, err := os.Stat(c); err == nil && fi.IsDir() {
+			abs, _ := filepath.Abs(c)
+			return abs
+		}
+	}
+	return ""
+}
+
 
