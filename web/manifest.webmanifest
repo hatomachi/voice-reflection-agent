@@ -1,7 +1,7 @@
 {
-  "name": "Voice Reflection",
-  "short_name": "Reflection",
-  "description": "iPhone Voice Reflection to personal-vault Queue",
+  "name": "Meeting Recorder",
+  "short_name": "Meeting",
+  "description": "PC Meeting Audio & Screen Recorder with Auto Screenshot",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#09090b",

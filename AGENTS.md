@@ -156,7 +156,10 @@ voice-reflection-agent/
 9. **[x] Step 9: Goベース Windows/Mac ネイティブ対応（ポータブル単一exe化 ＋ ローカルClaude連携 ＋ ローカルフォルダ直接保存）**:
    - `portable-ssh-ftp` で確立した Pure Go 単一バイナリ設計（Macクロスコンパイル、CGO不要、サイズ約7.0MB）を適用。
    - `go:embed` でWebフロントエンド資産一式を内包し、ダブルクリックで自動的にローカルHTTPサーバー起動＆Edge/Chromeブラウザオープン。
-   - **ローカル `claude` CLI 連携 (`/api/ai/claude`, `/api/ai/reflection`, `/api/ai/meeting-summary`)**: 社内PCや閉域環境で外部Gemini APIが使えない場合でも、ローカルPCに導入されたClaude CLI（Claude Code headless等）を直接実行し、高精度な議事録要約・7つの習慣リフレクションを即座に生成。
-   - **ローカルフォルダ直接一括保存 (`/api/save/meeting`) ＆ フォルダ即時起動 (`/api/open-folder`)**: 会議終了後、ZIPダウンロード不要でローカルフォルダに直接MP3・スクショ画像群・README.mdを書き出し、ワンクリックでエクスプローラー/Finder起動。
-   - **セルフリフレクションのローカルVault直書き (`/api/save/reflection`)**: `personal-vault` を自動検知し、ワンクリックで `00_Inbox/Reflections/YYYY-MM-DD.md` に直接保存。
-   - **PWAとNativeのハイブリッドUI**: 既存のスマホ（iOS PWA / Cloudflare Pages）運用を一切壊さず、exe経由で起動した時のみ「🟢 Native」バッジが点灯しネイティブ機能がフル解放される自動検知設計。
+    - **ローカル `claude` CLI 連携 (`/api/ai/claude`, `/api/ai/meeting-summary`)**: 社内PCや閉域環境で外部Gemini APIが使えない場合でも、ローカルPCに導入されたClaude CLI（Claude Code headless等）を直接実行し、高精度な議事録要約を即座に生成。
+    - **ローカルフォルダ直接一括保存 (`/api/save/meeting`) ＆ フォルダ即時起動 (`/api/open-folder`)**: 会議終了後、ZIPダウンロード不要でローカルフォルダに直接MP3・スクショ画像群・README.mdを書き出し、ワンクリックでエクスプローラー/Finder起動。
+    - **PWAとNativeのハイブリッドUI**: 既存のスマホ（iOS PWA / Cloudflare Pages）運用を一切壊さず、exe経由で起動した時のみ「🟢 Native」バッジが点灯しネイティブ機能がフル解放される自動検知設計。
+10. **[x] Step 10: Web UI の「Meeting Recorder（会議・画面記録）」への一本化 ＆ リフレクション機能の整理**:
+    - 夜のセルフリフレクション機能は、iOSショートカット運用（iPhoneボイスメモ共有 ➡ GitHub Queue ➡ Mac常駐agyデーモン）で運用確立（PWAの画面切替による録音中断問題を根本解決）。
+    - これに伴い、Web UI（PWA / Go Native Engine）からリフレクション関連のタブ・UI・録音ハンドラ・APIエンドポイント（`/api/ai/reflection`, `/api/save/reflection`）を完全に削除。
+    - アプリを「**Meeting Recorder**」専用ツールとして一本化し、会議・画面記録（2系統音声・画面変化JPEG検知・MP3生成・Claude議事録要約・ZIP/ローカルフォルダ保存）に集中したシンプルで洗練された構成へ最適化。

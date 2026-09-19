@@ -1,11 +1,5 @@
 package ai
 
-import (
-	_ "embed"
-)
-
-//go:embed templates/reflection_prompt.md
-var ReflectionPromptTemplate string
 
 const MeetingSummaryPromptTemplate = `あなたは卓越したITアーキテクト兼プロジェクトマネージャー（PM）です。
 以下の「会議記録情報（録音時間、メモ、文字起こし、撮影されたスライドスクショ情報）」を精読し、

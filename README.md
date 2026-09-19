@@ -1,6 +1,13 @@
-# 🎙️ Voice Reflection Agent
+# 🎙️ Voice Reflection Agent & 🖥️ Meeting Recorder
 
-iPhoneのボイスメモから「今日もやもやしたこと」「AIに相談したいこと」「明日必ずやるたった1つの石」を喋り、MacBook常駐の最上位AI（`agy` / Gemini 3.5+）が『7つの習慣』の役割定義に照らし合わせて深層リフレクションを自律生成、`personal-vault`（Obsidian）に自動蓄積・Git同期するパイプラインです。
+本リポジトリは、以下の2つの柱からなる生産性・内省支援システムです：
+
+1. **夜のセルフリフレクション（iOSショートカット ＋ Mac常駐agyデーモン）**:
+   - iPhoneのボイスメモで「今日もやもやしたこと」「AIに相談したいこと」「明日必ずやるたった1つの石」を喋り、iOSショートカットからGitHub Queueへ送信。
+   - 自宅MacBook常駐の最上位AI（`agy` / Gemini 3.5+）が自律検知し、『7つの習慣』の役割定義に照らし合わせた深層リフレクションを生成、`personal-vault`（Obsidian）に蓄積・Git同期。
+2. **PC向け会議・画面記録ツール（Meeting Recorder / PWA & Pure Go Native Engine）**:
+   - Webブラウザおよび単一exeから利用可能な会議・画面記録ツール。
+   - 画面変化検知による自動JPEGスクショ、マイク＆PCスピーカー2系統音声ミキシング、ブラウザ内LAME MP3エンコード、ローカルClaudeによる議事録要約（決定事項・ToDo抽出）、ZIP・ローカルフォルダ直接保存に対応。
 
 ---
 
@@ -8,8 +15,9 @@ iPhoneのボイスメモから「今日もやもやしたこと」「AIに相談
 
 - **Inboundポート開放ゼロ**: 自宅ルーターのポート開放不要。MacBook ➡ GitHub への Outbound HTTPS 通信のみで安全にキューを処理。
 - **最上位知能の自律活用**: クラウド単発APIの表面的な相槌ではなく、MacBook上の `agy`（Gemini 3.5+）が `personal-vault/00_役割定義.md` と `00_Dashboard.md` を自律参照して「鋭い指摘（逃避の看破）」と「温かい承認」を生成。
-- **夜のフリクションゼロ**: iPhoneボイスメモで喋って「共有」からショートカット1タップ（またはWebAppからワンタップ）。
+- **夜のフリクションゼロ**: iPhoneボイスメモで喋って「共有」からショートカット1タップ。画面切り替えによる録音停止の心配も一切なし。
 - **翌朝0.1秒でTODO消化**: 生成されたノートは `webapp-obsidian`（PWA）から瞬時に閲覧でき、「たった1つの石」をタップしてタスク消化可能。
+- **強力な会議記録機能**: 画面共有のシステム音声つけ忘れ防止インターロック、音量波形ビジュアライザー、社内GitLab/GitHub/ローカル保存対応。
 
 ---
 
@@ -29,11 +37,15 @@ voice-reflection-agent/
 │   ├── git_sync.py                            # Outbound git fetch / commit / push
 │   ├── processor.py                           # キューパース・リフレクション生成・保存
 │   └── daemon.py                              # 常駐監視・ワンショット実行 CLI
-├── web/                                       # iPhone録音用 Cloudflare Pages PWA
-│   ├── index.html                             # 単一SPA（Wake Lock、MediaRecorder、Gemini文字起こし、GitHub送信）
+├── web/                                       # 会議・画面記録 Webアプリ (Cloudflare Pages PWA)
+│   ├── index.html                             # 単一SPA（Meeting Recorder、画面変化検知、LAME MP3、Claude要約）
 │   ├── manifest.webmanifest                   # PWAマニフェスト設定
 │   ├── sw.js                                  # Service Worker (オフラインキャッシュ)
 │   └── icon.svg                               # アプリアイコン
+├── internal/                                  # Pure Go Native Engine (Windows/Mac)
+│   ├── api/handler.go                         # ローカルHTTP API (/api/ai/meeting-summary, /api/save/meeting 等)
+│   ├── ai/runner.go                           # ローカル claude CLI 連携
+│   └── server/server.go                       # 組み込みWebサーバー・自動ブラウザオープン
 ├── config/
 │   └── com.user.voice-reflection.plist        # macOS launchd 設定（ログイン時自動常駐）
 ├── templates/
@@ -128,12 +140,10 @@ iPhoneでの夜間セルフリフレクションおよびPCでの会議・画面
 ### 🌟 Native Engine でできること
 1. **ローカル `claude` CLI 連携**:
    - 外部Gemini APIが使えない社内閉域PCでも、ローカルPC内の `claude`（Claude Code headless 等）をワンクリックで実行。
-   - 会議議事録の要約（決定事項・ToDo抽出）や、7つの習慣深層リフレクションを即座に生成。
+   - 会議議事録の要約（決定事項・ToDo抽出）を即座に生成。
 2. **ローカルフォルダ直接一括保存**:
    - 会議終了後、ZIPダウンロードの手間なくローカルフォルダ（`data/meetings/YYYY-MM-DD_HHmmss/` 等）へ MP3・スクショJPEG群・README.md を直接書き出し。
    - ワンクリックでエクスプローラー／Finderを起動。
-3. **セルフリフレクションのローカルVault直書き**:
-   - `personal-vault` を自動検知し、`00_Inbox/Reflections/YYYY-MM-DD.md` に直接保存。
 
 ### 🚀 ビルド＆起動手順（Mac上で完結）
 

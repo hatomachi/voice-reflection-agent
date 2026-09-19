@@ -27,10 +27,8 @@ func NewAPIHandler() *APIHandler {
 func (h *APIHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/health", h.handleHealth)
 	mux.HandleFunc("/api/ai/claude", h.handleClaude)
-	mux.HandleFunc("/api/ai/reflection", h.handleReflection)
 	mux.HandleFunc("/api/ai/meeting-summary", h.handleMeetingSummary)
 	mux.HandleFunc("/api/save/meeting", h.handleSaveMeeting)
-	mux.HandleFunc("/api/save/reflection", h.handleSaveReflection)
 	mux.HandleFunc("/api/open-folder", h.handleOpenFolder)
 	mux.HandleFunc("/api/config", h.handleConfig)
 }
@@ -422,61 +420,6 @@ func decodeBase64Data(raw string) ([]byte, error) {
 	return base64.StdEncoding.DecodeString(cleanBase64)
 }
 
-// セルフリフレクション生成リクエスト/レスポンス
-type ReflectionRequest struct {
-	Text      string `json:"text"`
-	VaultPath string `json:"vaultPath,omitempty"`
-}
-
-type ReflectionResponse struct {
-	Success bool   `json:"success"`
-	Result  string `json:"result,omitempty"`
-	Date    string `json:"date,omitempty"`
-	Error   string `json:"error,omitempty"`
-}
-
-func (h *APIHandler) handleReflection(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	var req ReflectionRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, ReflectionResponse{
-			Success: false,
-			Error:   "Invalid JSON: " + err.Error(),
-		})
-		return
-	}
-
-	if strings.TrimSpace(req.Text) == "" {
-		writeJSON(w, http.StatusBadRequest, ReflectionResponse{
-			Success: false,
-			Error:   "音声文字起こしまたはメモテキストが空です",
-		})
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
-
-	result, err := ai.GenerateReflection(ctx, req.Text, req.VaultPath)
-	if err != nil {
-		writeJSON(w, http.StatusOK, ReflectionResponse{
-			Success: false,
-			Error:   "リフレクション生成失敗: " + err.Error(),
-		})
-		return
-	}
-
-	today := time.Now().Format("2006-01-02")
-	writeJSON(w, http.StatusOK, ReflectionResponse{
-		Success: true,
-		Result:  result,
-		Date:    today,
-	})
-}
 
 // 会議サマリー生成リクエスト/レスポンス
 type MeetingSummaryRequest struct {
@@ -525,73 +468,6 @@ func (h *APIHandler) handleMeetingSummary(w http.ResponseWriter, r *http.Request
 	})
 }
 
-// リフレクション保存リクエスト/レスポンス
-type SaveReflectionRequest struct {
-	Date      string `json:"date"`
-	Content   string `json:"content"`
-	VaultPath string `json:"vaultPath,omitempty"`
-}
-
-func (h *APIHandler) handleSaveReflection(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	var req SaveReflectionRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
-		return
-	}
-
-	if req.Date == "" {
-		req.Date = time.Now().Format("2006-01-02")
-	}
-
-	vaultCandidates := []string{
-		req.VaultPath,
-		"../personal-vault",
-		"../../personal-vault",
-		filepath.Join(os.Getenv("HOME"), "work", "personal-vault"),
-		filepath.Join(os.Getenv("USERPROFILE"), "work", "personal-vault"),
-	}
-
-	var targetVault string
-	for _, v := range vaultCandidates {
-		if v != "" {
-			if fi, err := os.Stat(v); err == nil && fi.IsDir() {
-				targetVault = v
-				break
-			}
-		}
-	}
-
-	var targetFile string
-	if targetVault != "" {
-		saveDir := filepath.Join(targetVault, "00_Inbox", "Reflections")
-		_ = os.MkdirAll(saveDir, 0755)
-		targetFile = filepath.Join(saveDir, fmt.Sprintf("%s.md", req.Date))
-	} else {
-		// Vaultが見つからない場合はローカル data/reflections/
-		saveDir := filepath.Join(".", "data", "reflections")
-		_ = os.MkdirAll(saveDir, 0755)
-		targetFile = filepath.Join(saveDir, fmt.Sprintf("%s.md", req.Date))
-	}
-
-	if err := os.WriteFile(targetFile, []byte(req.Content), 0644); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{
-			"success": false,
-			"error":   "リフレクション保存失敗: " + err.Error(),
-		})
-		return
-	}
-
-	absPath, _ := filepath.Abs(targetFile)
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"success":   true,
-		"savedPath": absPath,
-	})
-}
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
